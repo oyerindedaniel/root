@@ -36,7 +36,11 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+CLAUDE.md
+.cursor/
 
 
+# Local product and architecture guides
 PRODUCT-GUIDE.md
 WEBMCP-TECHNICAL-GUIDE.md
+ARCHITECTURE.md

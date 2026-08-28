@@ -1,0 +1,14 @@
+{
+  "extends": "@repo/typescript-config/react-library.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@api/*": ["../../apps/api/src/*"]
+    }
+  },
+  "include": ["src"]
+}

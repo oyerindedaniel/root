@@ -1,0 +1,20 @@
+# Monorepo
+
+- **No noise.** One fact per bullet. Principles only — not implementations, filenames, or the change you just made.
+- **pnpm** workspaces + Turborepo. Run pnpm directly. Root: `pnpm dev`, `pnpm build`, `pnpm check-types`, `pnpm lint`.
+- Apps: `root` 3000, `accounts` 3001, `shop` 3002, `support` 3003, `api` 4000. Packages: `ui`, `auth`, `db`, `api-client`, `contracts`. Tooling: `typescript-config`, `eslint-config`.
+- **Done:** `pnpm check-types` (or the covering `tsc --noEmit`) before you stop. `check-types` and `dev` depend on `^build`.
+- **Built vs JIT:** `@repo/contracts` is built (`tsc` → `dist/`). Not JIT. Not in `transpilePackages`. JIT for Next: `@repo/ui`, `@repo/api-client`.
+- **Install:** `pnpm add` / `--filter` / `-w`. Latest stable unless already pinned. Never hand-edit versions.
+- **Imports:** static only. The call site names the contract. Env is `@repo/db/env`, not `@repo/db`. Contracts from `@repo/contracts` at the call site — no redefine, no re-export. API: `@api/…` + `.js` (no `../`). Groups: side-effect → external → workspace → `@api/…`. Inline `import type` on a shared module. Next: `@/*`. `api-client`: bundler, no `.js` on relatives.
+- **No comments in source.** Put rules here or in `.env.example`.
+- **Docker:** agents do not run Compose unless asked. `apps/api/.env.local`. Postgres-only: `pnpm docker:postgres`. API in Compose: `pnpm docker:up` (runner) | `pnpm docker:dev` (watch target + `--watch --build`). `pnpm docker:down` | `docker:logs` | `docker:ps`. Container entrypoint migrates when `RUN_DB_MIGRATE=true` (default); empty DB also runs `pnpm db:seed`.
+- API: Express 5, tRPC v11 `/api/trpc` `v1.*`, thin `modules/*/`, no Express in tRPC context, `AppRouter` from `@repo/api/trpc`, `@api/*` → `apps/api/src/*`.
+- Zod 4: `z.url()`, `z.iso.datetime()`.
+- Client: `@repo/api-client`. `NEXT_PUBLIC_API_URL` required; Next rewrites `/api/:path*`.
+- Better Auth `/api/auth/*` before `express.json`. Identity only; authz in procedure guards.
+- Env: `requireEnv` / required `NEXT_PUBLIC_*`. `.env.local` then `.env` (neither overrides already-set process env — Compose `DATABASE_URL` wins in the API container). Copy `.env.example` → `.env.local`.
+- Root does not call Accounts/Shop/Support mutations.
+- DB: Drizzle + Postgres. `packages/db` by owner. No cross-domain joins. `pnpm db:generate` then `pnpm db:migrate`. No `db:push` without explicit consent. No ad-hoc SQL. Empty `returning` is not success. Auth seed: `pnpm db:seed`.
+- Queries: filters in SQL `WHERE`. One round-trip. One JS pass (`flatMap` / `for…of`), not `.filter().map()`. Readable names. `Pick` / `Omit` / `z.infer`.
+- **Scale:** `@repo/ui`. Headings `text-3xl`. Body `text-base`. Labels `@repo/ui/label`. Controls `h-8`. Buttons `rounded-3xl` and hug the label. Primary or destructive; no outline; ghost only with a visible gray hover. Heroicons `24/outline`. `data-app` remaps `primary`. Root is a Mac desktop: full-viewport canvas, pinned Dock, one stage window, one workflow capsule. Steal spatial rules, not Apple chrome. Child pages are a dark canvas in that hue, not the ink fill. Inter sans; Geist Mono for `font-mono`.

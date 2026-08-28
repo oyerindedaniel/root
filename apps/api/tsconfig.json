@@ -1,0 +1,12 @@
+{
+  "extends": "@repo/typescript-config/node.json",
+  "compilerOptions": {
+    "paths": {
+      "@api/*": ["./src/*"]
+    },
+    "noEmit": true,
+    "rootDir": "./src",
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

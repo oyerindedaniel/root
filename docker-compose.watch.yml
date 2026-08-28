@@ -1,0 +1,39 @@
+services:
+  api:
+    build:
+      target: development
+    image: root-api:dev
+    environment:
+      NODE_ENV: development
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/api/src
+          target: /app/apps/api/src
+        - action: sync
+          path: ./packages/contracts/src
+          target: /app/packages/contracts/src
+        - action: sync
+          path: ./packages/auth/src
+          target: /app/packages/auth/src
+        - action: sync
+          path: ./packages/db/src
+          target: /app/packages/db/src
+        - action: sync
+          path: ./packages/db/drizzle
+          target: /app/packages/db/drizzle
+        - action: sync
+          path: ./packages/db/drizzle.config.ts
+          target: /app/packages/db/drizzle.config.ts
+        - action: rebuild
+          path: ./apps/api/package.json
+        - action: rebuild
+          path: ./packages/contracts/package.json
+        - action: rebuild
+          path: ./packages/auth/package.json
+        - action: rebuild
+          path: ./packages/db/package.json
+        - action: rebuild
+          path: ./pnpm-lock.yaml
+        - action: rebuild
+          path: ./package.json

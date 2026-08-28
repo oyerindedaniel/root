@@ -1,0 +1,41 @@
+{
+  "name": "@repo/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./trpc": "./src/trpc/router.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --noEmit",
+    "start": "tsx src/index.ts",
+    "lint": "eslint src/ --max-warnings 0",
+    "check-types": "tsc --noEmit",
+    "db:seed": "tsx src/scripts/seed-auth.ts"
+  },
+  "dependencies": {
+    "@repo/auth": "workspace:*",
+    "@repo/contracts": "workspace:*",
+    "@repo/db": "workspace:*",
+    "@trpc/server": "11.18.0",
+    "better-auth": "1.6.26",
+    "cors": "2.8.6",
+    "express": "5.2.1",
+    "helmet": "8.3.0",
+    "postgres": "3.4.9",
+    "superjson": "2.2.6",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/cors": "2.8.19",
+    "@types/express": "5.0.6",
+    "@types/node": "26.3.0",
+    "eslint": "10.9.1",
+    "tsx": "4.21.0",
+    "typescript": "7.0.2"
+  }
+}

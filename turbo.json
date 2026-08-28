@@ -1,19 +1,41 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_ROOT_ORIGIN",
+    "NEXT_PUBLIC_SHOP_ORIGIN",
+    "NEXT_PUBLIC_SHOP_ENTRY_URL",
+    "DATABASE_URL",
+    "NODE_ENV",
+    "PORT",
+    "LISTEN_HOST",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_DB",
+    "POSTGRES_PORT",
+    "BETTER_AUTH_URL",
+    "BETTER_AUTH_SECRET",
+    "CORS_ORIGINS",
+    "BETTER_AUTH_TRUSTED_ORIGINS"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "dist/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": ["^build", "^check-types"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
     },
     "dev": {
+      "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
     }

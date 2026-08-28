@@ -1,0 +1,121 @@
+:root {
+  --sage-wash: oklch(0.9923 0.0025 165.08);
+  --sage-surface: oklch(0.9803 0.0025 165.08);
+  --sage-border: oklch(0.8508 0.0052 164.98);
+  --sage-solid: oklch(0.6392 0.0103 171.61);
+  --sage-muted: oklch(0.5008 0.0081 174.11);
+  --sage-ink: oklch(0.2396 0.0117 167.56);
+
+  --jade-wash: oklch(0.9817 0.0091 161.36);
+  --jade-mute: oklch(0.9019 0.0466 165.05);
+  --jade-solid: oklch(0.6422 0.1150 170.73);
+  --jade-hover: oklch(0.6130 0.1096 170.85);
+  --jade-ink: oklch(0.3254 0.0406 170.08);
+
+  --indigo-wash: oklch(0.9823 0.0083 271.33);
+  --indigo-mute: oklch(0.9019 0.0471 269.62);
+  --indigo-solid: oklch(0.5438 0.1910 267.01);
+  --indigo-hover: oklch(0.5106 0.1954 266.58);
+  --indigo-ink: oklch(0.3126 0.0858 268.60);
+
+  --amber-wash: oklch(0.9856 0.0238 99.10);
+  --amber-mute: oklch(0.9695 0.0684 100.39);
+  --amber-solid: oklch(0.8537 0.1572 84.13);
+  --amber-hover: oklch(0.7577 0.1403 76.72);
+  --amber-ink: oklch(0.5706 0.1291 63.94);
+  --amber-on-solid: oklch(0.3522 0.0486 54.17);
+
+  --tomato-wash: oklch(0.9842 0.0076 27.23);
+  --tomato-mute: oklch(0.8890 0.0590 32.56);
+  --tomato-solid: oklch(0.6271 0.1936 33.34);
+  --tomato-hover: oklch(0.6035 0.1947 33.22);
+  --tomato-ink: oklch(0.5665 0.1978 32.73);
+}
+
+@theme {
+  --color-background: oklch(1 0 0);
+  --color-foreground: var(--sage-ink);
+  --color-surface: var(--sage-surface);
+  --color-muted: var(--sage-surface);
+  --color-muted-foreground: var(--sage-muted);
+  --color-border: var(--sage-border);
+  --color-ring: var(--indigo-solid);
+  --inset-shadow-highlight: 0 1px 0 0 oklch(0 0 0 / 0.06);
+
+  --color-secondary: var(--sage-solid);
+  --color-secondary-foreground: #fff;
+
+  --color-primary: var(--indigo-solid);
+  --color-primary-foreground: #fff;
+  --color-primary-hover: var(--indigo-hover);
+  --color-primary-wash: var(--indigo-wash);
+  --color-primary-mute: var(--indigo-mute);
+  --color-primary-ink: var(--indigo-ink);
+
+  --color-success: var(--jade-solid);
+  --color-success-foreground: #fff;
+  --color-success-hover: var(--jade-hover);
+  --color-success-wash: var(--jade-wash);
+  --color-success-mute: var(--jade-mute);
+  --color-success-ink: var(--jade-ink);
+
+  --color-warning: var(--amber-solid);
+  --color-warning-foreground: var(--amber-on-solid);
+  --color-warning-hover: var(--amber-hover);
+  --color-warning-wash: var(--amber-wash);
+  --color-warning-mute: var(--amber-mute);
+  --color-warning-ink: var(--amber-ink);
+
+  --color-destructive: var(--tomato-solid);
+  --color-destructive-foreground: #fff;
+  --color-destructive-hover: var(--tomato-hover);
+  --color-destructive-wash: var(--tomato-wash);
+  --color-destructive-mute: var(--tomato-mute);
+  --color-destructive-ink: var(--tomato-ink);
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+}
+
+[data-app="accounts"] {
+  --color-primary: var(--jade-solid);
+  --color-primary-hover: var(--jade-hover);
+  --color-primary-foreground: #fff;
+  --color-primary-wash: var(--jade-wash);
+  --color-primary-mute: var(--jade-mute);
+  --color-primary-ink: var(--jade-ink);
+  --color-ring: var(--jade-solid);
+}
+
+[data-app="shop"] {
+  --color-primary: var(--amber-solid);
+  --color-primary-hover: var(--amber-hover);
+  --color-primary-foreground: var(--amber-on-solid);
+  --color-primary-wash: var(--amber-wash);
+  --color-primary-mute: var(--amber-mute);
+  --color-primary-ink: var(--amber-ink);
+  --color-ring: var(--amber-solid);
+}
+
+[data-app="support"],
+[data-app="root"] {
+  --color-primary: var(--indigo-solid);
+  --color-primary-hover: var(--indigo-hover);
+  --color-primary-foreground: #fff;
+  --color-primary-wash: var(--indigo-wash);
+  --color-primary-mute: var(--indigo-mute);
+  --color-primary-ink: var(--indigo-ink);
+  --color-ring: var(--indigo-solid);
+}
+
+[data-app="accounts"],
+[data-app="shop"],
+[data-app="support"] {
+  --color-background: oklch(from var(--color-primary-ink) 0.27 0.05 h);
+  --color-foreground: #fff;
+  --color-muted: color-mix(in srgb, #fff 10%, var(--color-background));
+  --color-muted-foreground: var(--color-primary-mute);
+  --color-border: color-mix(in oklch, white 26%, var(--color-background));
+  --inset-shadow-highlight: 0 1px 0 0 oklch(1 0 0 / 0.1);
+}

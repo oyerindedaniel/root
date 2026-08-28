@@ -1,0 +1,10 @@
+macos-dock.png
+https://support.apple.com/guide/mac-help/mh35859/mac
+https://help.apple.com/assets/69DD569682238CF8EC0621E2/69DD569982238CF8EC0621E9/en_US/dfc22041661ec2ee3cb3450b0c14eb94.png
+
+macos-dock-recent.png
+https://help.apple.com/assets/69DD569682238CF8EC0621E2/69DD569982238CF8EC0621E9/en_US/4b2d563d0b7bfabac8dfb13fde101e57.png
+
+macos-stage-manager.png
+https://support.apple.com/guide/mac-help/use-stage-manager-mchl534ba392/mac
+https://help.apple.com/assets/69DD569682238CF8EC0621E2/69DD569982238CF8EC0621E9/en_US/0a0584e3b341ab37bca48b55aa1e112b.png
