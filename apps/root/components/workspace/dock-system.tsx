@@ -12,7 +12,7 @@ import {
   TooltipTrigger,
 } from "@repo/ui/tooltip";
 
-import { useRootRuntime } from "@/lib/runtime/runtime-context";
+import { useRuntime } from "@/lib/runtime/runtime-context";
 
 const DockContext = createContext(false);
 
@@ -65,7 +65,7 @@ export function DockCustomers() {
 export function DockCatalog() {
   useDock();
   const { state, traySlotRef, restoreButtonRef, openCatalog, requestPlacement } =
-    useRootRuntime();
+    useRuntime();
   const mounted = state.provider.lifecycle !== "unmounted";
 
   return (

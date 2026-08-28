@@ -6,7 +6,7 @@ import { prepareShopSearchStep, revalidatePreparedStep } from "./prepare";
 import { runtimeReducer } from "./reducer";
 import { createInitialRuntimeState } from "./state";
 
-const operator = {
+const account = {
   id: "user_1",
   email: "dev@localhost",
   name: "Dev",
@@ -18,7 +18,7 @@ const fingerprint = schemaFingerprint({
 });
 
 function readyState() {
-  let state = createInitialRuntimeState(operator);
+  let state = createInitialRuntimeState(account);
   state = runtimeReducer(state, {
     type: "provider/mount",
     instanceId: "shop_1",

@@ -4,11 +4,11 @@ import { useRouter } from "next/navigation";
 
 import { authClient } from "@repo/api-client";
 
-import { useRootRuntime } from "@/lib/runtime/runtime-context";
+import { useRuntime } from "@/lib/runtime/runtime-context";
 
 export function DesktopIcons() {
   const router = useRouter();
-  const { state, openCatalog, requestPlacement } = useRootRuntime();
+  const { state, openCatalog, requestPlacement } = useRuntime();
   const mounted = state.provider.lifecycle !== "unmounted";
 
   return (

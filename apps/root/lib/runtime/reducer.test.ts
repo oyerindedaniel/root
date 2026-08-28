@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 import { runtimeReducer } from "./reducer";
 import { createInitialRuntimeState, type RuntimeState } from "./state";
 
-const operator = {
+const account = {
   id: "user_1",
   email: "dev@localhost",
   name: "Dev",
 };
 
-function mounted(state: RuntimeState = createInitialRuntimeState(operator)) {
+function mounted(state: RuntimeState = createInitialRuntimeState(account)) {
   return runtimeReducer(state, {
     type: "provider/mount",
     instanceId: "shop_1",
@@ -20,7 +20,7 @@ function mounted(state: RuntimeState = createInitialRuntimeState(operator)) {
 
 describe("runtimeReducer", () => {
   it("starts unmounted and signed in", () => {
-    const state = createInitialRuntimeState(operator);
+    const state = createInitialRuntimeState(account);
     expect(state.provider.lifecycle).toBe("unmounted");
     expect(state.workflow.lifecycle).toBe("draft");
     expect(state.sessionStatus).toBe("authenticated");
@@ -107,12 +107,12 @@ describe("runtimeReducer", () => {
     expect(state.control).toBe("human");
   });
 
-  it("records a signed-out session without trusting the template operator", () => {
-    const state = runtimeReducer(createInitialRuntimeState(operator), {
+  it("records a signed-out session without clearing the account", () => {
+    const state = runtimeReducer(createInitialRuntimeState(account), {
       type: "session/signed-out",
     });
     expect(state.sessionStatus).toBe("signed-out");
-    expect(state.operator.email).toBe("dev@localhost");
+    expect(state.account.email).toBe("dev@localhost");
   });
 
   it("finishes suction onto the tray", () => {

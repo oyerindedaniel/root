@@ -1,6 +1,6 @@
 "use client";
 
-import type { OperatorIdentity } from "@repo/contracts";
+import type { Account } from "@repo/contracts";
 
 import { TooltipProvider } from "@repo/ui/tooltip";
 
@@ -10,17 +10,17 @@ import { ProviderStage } from "@/components/workspace/provider-stage";
 import { SignedOutState } from "@/components/workspace/signed-out-state";
 import { WorkflowCapsule } from "@/components/workspace/workflow-capsule";
 import type { ProviderDirectory } from "@/lib/providers/directory";
-import { RootRuntimeProvider } from "@/lib/runtime/root-runtime-provider";
+import { RuntimeProvider } from "@/lib/runtime/runtime-provider";
 
 export function WorkspaceShell({
-  operator,
+  account,
   directory,
 }: {
-  operator: OperatorIdentity;
+  account: Account;
   directory: ProviderDirectory;
 }) {
   return (
-    <RootRuntimeProvider operator={operator} directory={directory}>
+    <RuntimeProvider account={account} directory={directory}>
       <TooltipProvider>
         <WorkflowCapsule />
         <DesktopIcons />
@@ -32,6 +32,6 @@ export function WorkspaceShell({
         </Dock.Root>
         <SignedOutState />
       </TooltipProvider>
-    </RootRuntimeProvider>
+    </RuntimeProvider>
   );
 }

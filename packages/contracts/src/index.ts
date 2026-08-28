@@ -1,3 +1,4 @@
+export * from "./account.js";
 export * from "./constants.js";
 export * from "./health.js";
 export * from "./shop.js";

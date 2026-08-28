@@ -134,14 +134,6 @@ export const ROOT_GATEWAY_TOOLS = [
   "inspect_workflow",
 ] as const satisfies readonly GatewayToolName[];
 
-export const operatorIdentitySchema = z.object({
-  id: z.string().min(1),
-  email: z.string().min(1),
-  name: z.string().min(1),
-});
-
-export type OperatorIdentity = z.infer<typeof operatorIdentitySchema>;
-
 export const trustedProviderEntrySchema = z.object({
   providerId: providerIdSchema,
   origin: originSchema,

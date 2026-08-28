@@ -3,11 +3,11 @@
 import { Button } from "@repo/ui/button";
 import { useRouter } from "next/navigation";
 
-import { useRootRuntime } from "@/lib/runtime/runtime-context";
+import { useRuntime } from "@/lib/runtime/runtime-context";
 
 export function SignedOutState() {
   const router = useRouter();
-  const { state } = useRootRuntime();
+  const { state } = useRuntime();
   if (state.sessionStatus !== "signed-out") {
     return null;
   }
@@ -17,7 +17,7 @@ export function SignedOutState() {
       <div className="max-w-md rounded-lg border border-border bg-background p-6">
         <h2 className="text-3xl font-medium">Session ended</h2>
         <p className="mt-3 text-base text-muted-foreground">
-          The API no longer has an operator session. Sign in again to continue.
+          The API no longer has a session. Sign in again to continue.
         </p>
         <Button
           className="mt-4"

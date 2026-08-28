@@ -30,7 +30,7 @@ export function runtimeReducer(
           outcome: null,
         },
         discoveredTools: [],
-        workflow: createInitialRuntimeState(state.operator).workflow,
+        workflow: createInitialRuntimeState(state.account).workflow,
       };
     case "provider/loaded":
       if (state.provider.instanceId !== action.instanceId) {
@@ -93,7 +93,7 @@ export function runtimeReducer(
       };
     case "provider/unmount":
       return {
-        ...createInitialRuntimeState(state.operator),
+        ...createInitialRuntimeState(state.account),
         sessionStatus: state.sessionStatus,
         webmcpStatus: state.webmcpStatus,
       };
@@ -144,7 +144,7 @@ export function runtimeReducer(
     case "workflow/draft":
       return {
         ...state,
-        workflow: createInitialRuntimeState(state.operator).workflow,
+        workflow: createInitialRuntimeState(state.account).workflow,
         provider: { ...state.provider, activeTool: null, outcome: null },
       };
     case "workflow/prepared":

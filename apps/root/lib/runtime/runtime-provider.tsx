@@ -8,7 +8,7 @@ import {
   type BoundedResultEnvelope,
   type DiscoverCapabilitiesInput,
   type InspectWorkflowOutput,
-  type OperatorIdentity,
+  type Account,
 } from "@repo/contracts";
 import {
   useCallback,
@@ -18,7 +18,6 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-
 import { animateSuction, layoutFromRect, prefersReducedMotion } from "@/lib/motion/suction";
 import {
   DirectoryError,
@@ -29,8 +28,8 @@ import { GatewayRegistrar } from "@/lib/runtime/gateway-registrar";
 import { prepareShopSearchStep, revalidatePreparedStep } from "@/lib/runtime/prepare";
 import { runtimeReducer } from "@/lib/runtime/reducer";
 import {
-  RootRuntimeContextProvider,
-  type RootRuntimeApi,
+  RuntimeContextProvider,
+  type RuntimeApi,
 } from "@/lib/runtime/runtime-context";
 import { SessionWatcher } from "@/lib/runtime/session-watcher";
 import {
@@ -53,18 +52,18 @@ type LoadWaiter = {
   resolve: () => void;
 };
 
-export function RootRuntimeProvider({
-  operator,
+export function RuntimeProvider({
+  account,
   directory,
   children,
 }: {
-  operator: OperatorIdentity;
+  account: Account;
   directory: ProviderDirectory;
   children: ReactNode;
 }) {
   const [state, dispatch] = useReducer(
     runtimeReducer,
-    operator,
+    account,
     createInitialRuntimeState,
   );
   const stateRef = useRef(state);
@@ -498,12 +497,12 @@ export function RootRuntimeProvider({
     return () => observer.disconnect();
   }, [applySurfaceLayout, state.provider.lifecycle, state.provider.placement]);
 
-  const api = useMemo<RootRuntimeApi>(
+  const api = useMemo<RuntimeApi>(
     () => ({
       state,
       dispatch,
       directory,
-      operator,
+      account,
       shop: directory.shop,
       workspaceRef,
       stageSlotRef,
@@ -514,11 +513,11 @@ export function RootRuntimeProvider({
       requestPlacement,
       openCatalog,
     }),
-    [directory, openCatalog, operator, requestPlacement, state],
+    [account, directory, openCatalog, requestPlacement, state],
   );
 
   return (
-    <RootRuntimeContextProvider value={api}>
+    <RuntimeContextProvider value={api}>
       <div ref={workspaceRef} className="desktop-canvas relative flex h-dvh flex-col overflow-hidden">
         {children}
         <ProviderIframe
@@ -538,7 +537,7 @@ export function RootRuntimeProvider({
       <SessionWatcher
         onSignedOut={() => dispatch({ type: "session/signed-out" })}
       />
-    </RootRuntimeContextProvider>
+    </RuntimeContextProvider>
   );
 }
 

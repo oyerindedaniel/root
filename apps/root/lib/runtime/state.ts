@@ -1,6 +1,6 @@
 import type {
+  Account,
   NormalizedToolDescriptor,
-  OperatorIdentity,
   PreparedShopSearchStep,
   ProviderLifecycle,
   ProviderPlacement,
@@ -16,7 +16,7 @@ export type ControlOwner = "human" | "agent";
 export type RuntimeState = {
   sessionStatus: SessionStatus;
   webmcpStatus: WebmcpStatus;
-  operator: OperatorIdentity;
+  account: Account;
   provider: {
     instanceId: string | null;
     origin: string | null;
@@ -69,13 +69,11 @@ export type RuntimeAction =
   | { type: "workflow/cancelled"; workflowId: string }
   | { type: "workflow/invalidate" };
 
-export function createInitialRuntimeState(
-  operator: OperatorIdentity,
-): RuntimeState {
+export function createInitialRuntimeState(account: Account): RuntimeState {
   return {
     sessionStatus: "authenticated",
     webmcpStatus: "unknown",
-    operator,
+    account,
     provider: {
       instanceId: null,
       origin: null,

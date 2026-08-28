@@ -12,10 +12,10 @@ function requireSeedEnv(name: string): string {
   return value;
 }
 
-async function seedOperator() {
-  const email = requireSeedEnv("SEED_OPERATOR_EMAIL");
-  const password = requireSeedEnv("SEED_OPERATOR_PASSWORD");
-  const name = requireSeedEnv("SEED_OPERATOR_NAME");
+async function seedAccount() {
+  const email = requireSeedEnv("SEED_ACCOUNT_EMAIL");
+  const password = requireSeedEnv("SEED_ACCOUNT_PASSWORD");
+  const name = requireSeedEnv("SEED_ACCOUNT_NAME");
 
   try {
     await auth.api.signUpEmail({
@@ -25,17 +25,17 @@ async function seedOperator() {
         name,
       },
     });
-    console.log(`Seeded operator: ${email}`);
+    console.log(`Seeded account: ${email}`);
   } catch (error) {
     if (error instanceof APIError && error.statusCode === 422) {
-      console.log(`Operator already seeded: ${email}`);
+      console.log(`Account already seeded: ${email}`);
       return;
     }
     throw error;
   }
 }
 
-seedOperator()
+seedAccount()
   .then(() => process.exit(0))
   .catch((error: unknown) => {
     console.error(error);

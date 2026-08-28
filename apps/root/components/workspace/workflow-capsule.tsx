@@ -2,11 +2,11 @@
 
 import { cn } from "@repo/ui/lib/cn";
 
-import { useRootRuntime } from "@/lib/runtime/runtime-context";
+import { useRuntime } from "@/lib/runtime/runtime-context";
 import type { RuntimeState } from "@/lib/runtime/state";
 
 export function WorkflowCapsule() {
-  const { state } = useRootRuntime();
+  const { state } = useRuntime();
   const running =
     state.workflow.lifecycle === "executing" ||
     state.provider.lifecycle === "mounting" ||

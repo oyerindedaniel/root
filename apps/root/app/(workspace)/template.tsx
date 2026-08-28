@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 
-import { requireRootOperator } from "@/lib/auth/require-root-operator";
+import { requireAccount } from "@/lib/auth/account";
 
 export default async function WorkspaceTemplate({
   children,
 }: {
   children: ReactNode;
 }) {
-  await requireRootOperator();
+  await requireAccount();
   return children;
 }

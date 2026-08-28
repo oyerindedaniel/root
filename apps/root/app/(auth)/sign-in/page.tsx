@@ -1,19 +1,12 @@
 import { redirect } from "next/navigation";
 
 import { SignInForm } from "@/components/auth/sign-in-form";
-import { parseReturnPath } from "@/lib/auth/return-url";
-import { loadRootOperator } from "@/lib/auth/require-root-operator";
+import { getAccount } from "@/lib/auth/account";
 
-export default async function SignInPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ from?: string | string[] }>;
-}) {
-  const params = await searchParams;
-  const nextPath = parseReturnPath(params.from);
-  const operator = await loadRootOperator();
-  if (operator) {
-    redirect(nextPath);
+export default async function SignInPage() {
+  const account = await getAccount();
+  if (account) {
+    redirect("/");
   }
 
   return (
@@ -21,7 +14,7 @@ export default async function SignInPage({
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-medium">Sign in</h1>
       </header>
-      <SignInForm nextPath={nextPath} />
+      <SignInForm />
     </main>
   );
 }

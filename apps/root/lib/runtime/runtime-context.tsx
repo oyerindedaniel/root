@@ -8,16 +8,16 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import type { OperatorIdentity, TrustedProviderEntry } from "@repo/contracts";
+import type { Account, TrustedProviderEntry } from "@repo/contracts";
 
 import type { ProviderDirectory } from "@/lib/providers/directory";
 import type { RuntimeAction, RuntimeState } from "@/lib/runtime/state";
 
-export type RootRuntimeApi = {
+export type RuntimeApi = {
   state: RuntimeState;
   dispatch: Dispatch<RuntimeAction>;
   directory: ProviderDirectory;
-  operator: OperatorIdentity;
+  account: Account;
   shop: TrustedProviderEntry;
   workspaceRef: RefObject<HTMLDivElement | null>;
   stageSlotRef: RefObject<HTMLDivElement | null>;
@@ -29,27 +29,25 @@ export type RootRuntimeApi = {
   openCatalog: () => void;
 };
 
-const RootRuntimeContext = createContext<RootRuntimeApi | null>(null);
+const RuntimeContext = createContext<RuntimeApi | null>(null);
 
-export function RootRuntimeContextProvider({
+export function RuntimeContextProvider({
   value,
   children,
 }: {
-  value: RootRuntimeApi;
+  value: RuntimeApi;
   children: ReactNode;
 }) {
   const memo = useMemo(() => value, [value]);
   return (
-    <RootRuntimeContext.Provider value={memo}>
-      {children}
-    </RootRuntimeContext.Provider>
+    <RuntimeContext.Provider value={memo}>{children}</RuntimeContext.Provider>
   );
 }
 
-export function useRootRuntime() {
-  const value = useContext(RootRuntimeContext);
+export function useRuntime() {
+  const value = useContext(RuntimeContext);
   if (!value) {
-    throw new Error("useRootRuntime requires RootRuntimeProvider.");
+    throw new Error("useRuntime requires RuntimeProvider.");
   }
   return value;
 }

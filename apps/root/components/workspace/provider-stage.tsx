@@ -4,10 +4,10 @@ import { MinusIcon } from "@heroicons/react/24/outline";
 
 import { cn } from "@repo/ui/lib/cn";
 
-import { useRootRuntime } from "@/lib/runtime/runtime-context";
+import { useRuntime } from "@/lib/runtime/runtime-context";
 
 export function ProviderStage() {
-  const { state, stageSlotRef, requestPlacement } = useRootRuntime();
+  const { state, stageSlotRef, requestPlacement } = useRuntime();
   const mounted = state.provider.lifecycle !== "unmounted";
   const onStage = mounted && state.provider.placement === "stage";
   const framed = onStage && state.motion !== "suction";

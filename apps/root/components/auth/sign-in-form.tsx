@@ -8,7 +8,7 @@ import { PasswordField } from "@repo/ui/password-field";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function SignInForm({ nextPath }: { nextPath: string }) {
+export function SignInForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,7 +17,7 @@ export function SignInForm({ nextPath }: { nextPath: string }) {
 
   async function finish(ok: boolean, errorMessage?: string) {
     if (ok) {
-      router.replace(nextPath);
+      router.replace("/");
       router.refresh();
       return;
     }
