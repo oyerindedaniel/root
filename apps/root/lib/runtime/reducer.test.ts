@@ -19,6 +19,18 @@ function mounted(state: RuntimeState = createInitialRuntimeState(account)) {
   });
 }
 
+function catalogStep() {
+  return {
+    providerId: "shop" as const,
+    origin: "http://localhost:3002",
+    toolName: "search_products",
+    namespacedName: "shop.search_products",
+    schemaFingerprint: "fp",
+    arguments: { query: "keyboard" },
+    readOnly: true as const,
+  };
+}
+
 describe("runtimeReducer", () => {
   it("starts unmounted and signed in", () => {
     const state = createInitialRuntimeState(account);
@@ -62,16 +74,7 @@ describe("runtimeReducer", () => {
     let state = runtimeReducer(mounted(), {
       type: "workflow/prepared",
       workflowId: "wf_1",
-      step: {
-        providerId: "shop",
-        providerInstanceId: "shop_1",
-        origin: "http://localhost:3002",
-        toolName: "search_products",
-        namespacedName: "shop.search_products",
-        schemaFingerprint: "fp",
-        arguments: { query: "keyboard" },
-        readOnly: true,
-      },
+      steps: [catalogStep()],
     });
     state = runtimeReducer(state, {
       type: "handles/invalidate",
@@ -86,16 +89,7 @@ describe("runtimeReducer", () => {
     let state = runtimeReducer(mounted(), {
       type: "workflow/prepared",
       workflowId: "wf_1",
-      step: {
-        providerId: "shop",
-        providerInstanceId: "shop_1",
-        origin: "http://localhost:3002",
-        toolName: "search_products",
-        namespacedName: "shop.search_products",
-        schemaFingerprint: "fp",
-        arguments: { query: "keyboard" },
-        readOnly: true,
-      },
+      steps: [catalogStep()],
     });
     state = runtimeReducer(state, {
       type: "workflow/executing",
@@ -129,5 +123,45 @@ describe("runtimeReducer", () => {
     expect(state.provider.placement).toBe("tray");
     expect(state.provider.lifecycle).toBe("ready");
     expect(state.motion).toBe("idle");
+  });
+
+  it("keeps an executing workflow when the provider document switches", () => {
+    let state = runtimeReducer(mounted(), {
+      type: "workflow/prepared",
+      workflowId: "wf_1",
+      steps: [catalogStep()],
+    });
+    state = runtimeReducer(state, {
+      type: "workflow/executing",
+      workflowId: "wf_1",
+    });
+    state = runtimeReducer(state, {
+      type: "provider/mount",
+      providerId: "accounts",
+      instanceId: "accounts_1",
+      origin: "http://localhost:3001",
+      entryUrl: "http://localhost:3001/",
+    });
+    expect(state.provider.providerId).toBe("accounts");
+    expect(state.workflow.lifecycle).toBe("executing");
+    expect(state.workflow.steps).toHaveLength(1);
+  });
+
+  it("does not fail an executing workflow when handles go stale", () => {
+    let state = runtimeReducer(mounted(), {
+      type: "workflow/prepared",
+      workflowId: "wf_1",
+      steps: [catalogStep()],
+    });
+    state = runtimeReducer(state, {
+      type: "workflow/executing",
+      workflowId: "wf_1",
+    });
+    state = runtimeReducer(state, {
+      type: "handles/invalidate",
+      instanceId: "shop_1",
+    });
+    expect(state.workflow.lifecycle).toBe("executing");
+    expect(state.discoveredTools).toEqual([]);
   });
 });

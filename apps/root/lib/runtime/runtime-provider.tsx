@@ -4,11 +4,10 @@ import {
   boundedError,
   parseBoundedJsonResult,
   parseExecuteResultText,
-  searchProductsOutputSchema,
+  type Account,
   type BoundedResultEnvelope,
   type DiscoverCapabilitiesInput,
   type InspectWorkflowOutput,
-  type Account,
 } from "@repo/contracts";
 import {
   useCallback,
@@ -28,7 +27,8 @@ import {
   type ProviderDirectory,
 } from "@/lib/providers/directory";
 import { GatewayRegistrar } from "@/lib/runtime/gateway-registrar";
-import { prepareShopSearchStep, revalidatePreparedStep } from "@/lib/runtime/prepare";
+import { getPassReadTool } from "@/lib/runtime/pass-tools";
+import { prepareWorkflow as bindWorkflow, revalidatePreparedStep } from "@/lib/runtime/prepare";
 import { runtimeReducer } from "@/lib/runtime/reducer";
 import {
   RuntimeContextProvider,
@@ -148,15 +148,14 @@ export function RuntimeProvider({
     dispatch({ type: "provider/unmount" });
   }, []);
 
-  const discoverCapabilities = useCallback(
+  const runDiscovery = useCallback(
     async (
-      input: DiscoverCapabilitiesInput,
+      providerId: string,
       signal: AbortSignal,
     ): Promise<BoundedResultEnvelope> => {
-      dispatch({ type: "control/set", control: "agent" });
       try {
-        const entry = getTrustedProvider(directory, input.providerId);
-        const instanceId = openProvider(input.providerId);
+        const entry = getTrustedProvider(directory, providerId);
+        const instanceId = openProvider(providerId);
         await waitForLoad(instanceId);
         signal.throwIfAborted();
         dispatch({ type: "provider/discovering", instanceId });
@@ -230,20 +229,37 @@ export function RuntimeProvider({
             : "discovery_failed";
         dispatch({ type: "provider/failed", reason: code });
         return boundedError(code, "Capability discovery failed.");
-      } finally {
-        dispatch({ type: "control/set", control: "human" });
       }
     },
     [directory, openProvider, waitForLoad],
   );
 
+  const discoverCapabilities = useCallback(
+    async (
+      input: DiscoverCapabilitiesInput,
+      signal: AbortSignal,
+    ): Promise<BoundedResultEnvelope> => {
+      dispatch({ type: "control/set", control: "agent" });
+      try {
+        return await runDiscovery(input.providerId, signal);
+      } finally {
+        dispatch({ type: "control/set", control: "human" });
+      }
+    },
+    [runDiscovery],
+  );
+
   const prepareWorkflow = useCallback((input: unknown): BoundedResultEnvelope => {
     const parsed = (input as { steps?: unknown[] }) ?? {};
     const workflowId = `wf_${crypto.randomUUID()}`;
-    const prepared = prepareShopSearchStep({
+    const prepared = bindWorkflow({
       state: stateRef.current,
       steps: Array.isArray(parsed.steps) ? parsed.steps : [],
       workflowId,
+      origins: {
+        shop: directory.providers.shop.origin,
+        accounts: directory.providers.accounts.origin,
+      },
     });
     if (!prepared.ok) {
       return prepared.error;
@@ -251,16 +267,16 @@ export function RuntimeProvider({
     dispatch({
       type: "workflow/prepared",
       workflowId: prepared.workflowId,
-      step: prepared.step,
+      steps: prepared.steps,
     });
     return {
       status: "success",
       data: {
         workflowId: prepared.workflowId,
-        step: prepared.step,
+        steps: prepared.steps,
       },
     };
-  }, []);
+  }, [directory]);
 
   const executeWorkflow = useCallback(
     async (
@@ -271,67 +287,14 @@ export function RuntimeProvider({
       if (
         current.workflow.id !== input.workflowId ||
         current.workflow.lifecycle !== "prepared" ||
-        !current.workflow.step ||
-        !current.provider.instanceId
+        current.workflow.steps.length === 0
       ) {
         return boundedError(
           "workflow_not_prepared",
-          "No prepared Catalog search matches that workflow.",
+          "No prepared workflow matches that id.",
         );
       }
-      const step = current.workflow.step;
-      const revalidated = revalidatePreparedStep({ state: current, step });
-      if (!revalidated.ok) {
-        dispatch({ type: "workflow/invalidate" });
-        return revalidated.error;
-      }
-
-      const modelContext = document.modelContext;
-      if (!modelContext) {
-        dispatch({ type: "webmcp/unavailable" });
-        dispatch({
-          type: "workflow/failed",
-          workflowId: input.workflowId,
-          reason: "webmcp_unavailable",
-        });
-        return boundedError(
-          "webmcp_unavailable",
-          "WebMCP is unavailable in this browser.",
-        );
-      }
-
-      const rediscovered = await modelContext.getTools({
-        fromOrigins: [step.origin],
-      });
-      const match = rediscovered.find(
-        (tool) => tool.origin === step.origin && tool.name === step.toolName,
-      );
-      if (!match) {
-        dispatch({ type: "workflow/invalidate" });
-        return boundedError(
-          "revalidation_failed",
-          "The Catalog tool is no longer registered.",
-        );
-      }
-      const normalized = normalizeDiscoveredTool({
-        providerId: "shop",
-        instanceId: current.provider.instanceId,
-        expectedOrigin: step.origin,
-        tool: match,
-      });
-      if (normalized.descriptor.schemaFingerprint !== step.schemaFingerprint) {
-        dispatch({ type: "workflow/invalidate" });
-        return boundedError(
-          "revalidation_failed",
-          "The Catalog tool contract changed since preparation.",
-        );
-      }
-      handlesRef.current.set(
-        current.provider.instanceId,
-        step.origin,
-        step.toolName,
-        normalized.handle,
-      );
+      const steps = current.workflow.steps;
 
       const combined = new AbortController();
       const onAbort = () => combined.abort();
@@ -339,24 +302,110 @@ export function RuntimeProvider({
       executionAbortRef.current = combined;
 
       dispatch({ type: "workflow/executing", workflowId: input.workflowId });
+      const results: unknown[] = [];
+      const evidenceParts: string[] = [];
       try {
-        const resultText = await executeRegisteredTool({
-          modelContext,
-          tool: normalized.handle,
-          invokeKind: normalized.descriptor.invokeKind,
-          input: step.arguments,
-          signal: combined.signal,
-        });
-        const parsed = searchProductsOutputSchema.parse(
-          parseBoundedJsonResult(parseExecuteResultText(resultText)),
-        );
+        for (let index = 0; index < steps.length; index += 1) {
+          const step = steps[index];
+          if (!step) {
+            throw new Error("execution_failed");
+          }
+          dispatch({
+            type: "workflow/step",
+            workflowId: input.workflowId,
+            index,
+          });
+          const discovered = await runDiscovery(
+            step.providerId,
+            combined.signal,
+          );
+          if (discovered.status === "error") {
+            dispatch({
+              type: "workflow/failed",
+              workflowId: input.workflowId,
+              reason: discovered.code,
+            });
+            return discovered;
+          }
+          combined.signal.throwIfAborted();
+
+          const live = stateRef.current;
+          const revalidated = revalidatePreparedStep({ state: live, step });
+          if (!revalidated.ok) {
+            dispatch({ type: "workflow/invalidate" });
+            return revalidated.error;
+          }
+          if (!live.provider.instanceId) {
+            dispatch({ type: "workflow/invalidate" });
+            return boundedError(
+              "revalidation_failed",
+              "The provider document is gone.",
+            );
+          }
+
+          const spec = getPassReadTool(step.namespacedName);
+          const handle = handlesRef.current.get(
+            live.provider.instanceId,
+            step.origin,
+            step.toolName,
+          );
+          const descriptor = live.discoveredTools.find(
+            (tool) =>
+              tool.providerId === step.providerId &&
+              tool.name === step.toolName,
+          );
+          if (!spec || !handle || !descriptor) {
+            dispatch({ type: "workflow/invalidate" });
+            return boundedError(
+              "revalidation_failed",
+              "The prepared tool is no longer registered.",
+            );
+          }
+
+          const modelContext = document.modelContext;
+          if (!modelContext) {
+            dispatch({ type: "webmcp/unavailable" });
+            dispatch({
+              type: "workflow/failed",
+              workflowId: input.workflowId,
+              reason: "webmcp_unavailable",
+            });
+            return boundedError(
+              "webmcp_unavailable",
+              "WebMCP is unavailable in this browser.",
+            );
+          }
+
+          dispatch({ type: "workflow/executing", workflowId: input.workflowId });
+          const resultText = await executeRegisteredTool({
+            modelContext,
+            tool: handle,
+            invokeKind: descriptor.invokeKind,
+            input: step.arguments,
+            signal: combined.signal,
+          });
+          const parsed = spec.parseOutput(
+            parseBoundedJsonResult(parseExecuteResultText(resultText)),
+          );
+          if (!parsed) {
+            throw new Error("execution_failed");
+          }
+          results.push(parsed.data);
+          evidenceParts.push(parsed.evidence);
+        }
+
+        const evidence = evidenceParts.join("; ");
         dispatch({
           type: "workflow/passed",
           workflowId: input.workflowId,
-          result: parsed,
-          evidence: `${parsed.products.length} products for "${parsed.query}"`,
+          result: results.length === 1 ? results[0] : { results },
+          results,
+          evidence,
         });
-        return { status: "success", data: parsed };
+        return {
+          status: "success",
+          data: results.length === 1 ? results[0] : { results },
+        };
       } catch (error) {
         const cancelled =
           combined.signal.aborted ||
@@ -366,20 +415,20 @@ export function RuntimeProvider({
             type: "workflow/cancelled",
             workflowId: input.workflowId,
           });
-          return boundedError("cancelled", "Catalog search was cancelled.");
+          return boundedError("cancelled", "Workflow was cancelled.");
         }
         dispatch({
           type: "workflow/failed",
           workflowId: input.workflowId,
           reason: "execution_failed",
         });
-        return boundedError("execution_failed", "Catalog search failed.");
+        return boundedError("execution_failed", "Workflow execution failed.");
       } finally {
         signal.removeEventListener("abort", onAbort);
         executionAbortRef.current = null;
       }
     },
-    [],
+    [runDiscovery],
   );
 
   const cancelWorkflow = useCallback(
@@ -413,17 +462,21 @@ export function RuntimeProvider({
           "That workflow is not current.",
         );
       }
+      const last =
+        current.workflow.results[current.workflow.results.length - 1];
       const result =
-        current.workflow.result === null
+        last === undefined
           ? null
           : {
               status: "success" as const,
-              data: current.workflow.result,
+              data: last,
             };
       return {
         workflowId: input.workflowId,
         lifecycle: current.workflow.lifecycle,
+        steps: current.workflow.steps,
         step: current.workflow.step,
+        results: current.workflow.results,
         result,
         failureReason: current.workflow.failureReason,
       };

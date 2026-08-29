@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { schemaFingerprint } from "@repo/contracts";
 
-import { prepareShopSearchStep, revalidatePreparedStep } from "./prepare";
+import { prepareWorkflow, revalidatePreparedStep } from "./prepare";
 import { runtimeReducer } from "./reducer";
 import { createInitialRuntimeState } from "./state";
 
@@ -12,35 +12,46 @@ const account = {
   name: "Dev",
 };
 
+const origins = {
+  shop: "http://localhost:3002",
+  accounts: "http://localhost:3001",
+};
+
 const fingerprint = schemaFingerprint({
   type: "object",
   properties: { query: { type: "string" } },
 });
 
-function readyState() {
+function readyProvider(
+  providerId: "shop" | "accounts",
+  toolName: string,
+  namespacedName: string,
+) {
+  const instanceId = `${providerId}_1`;
+  const origin = origins[providerId];
   let state = createInitialRuntimeState(account);
   state = runtimeReducer(state, {
     type: "provider/mount",
-    providerId: "shop",
-    instanceId: "shop_1",
-    origin: "http://localhost:3002",
-    entryUrl: "http://localhost:3002/",
+    providerId,
+    instanceId,
+    origin,
+    entryUrl: `${origin}/`,
   });
   state = runtimeReducer(state, {
     type: "provider/loaded",
-    instanceId: "shop_1",
+    instanceId,
   });
   state = runtimeReducer(state, {
     type: "provider/ready",
-    instanceId: "shop_1",
+    instanceId,
     tools: [
       {
-        providerId: "shop",
-        namespacedName: "shop.search_products",
-        name: "search_products",
-        title: "Search products",
-        description: "Search the catalog.",
-        origin: "http://localhost:3002",
+        providerId,
+        namespacedName,
+        name: toolName,
+        title: toolName,
+        description: toolName,
+        origin,
         inputSchema: { type: "object" },
         schemaFingerprint: fingerprint,
         invokeKind: "object",
@@ -52,11 +63,12 @@ function readyState() {
   return state;
 }
 
-describe("prepareShopSearchStep", () => {
-  it("binds one read-only Catalog search", () => {
-    const prepared = prepareShopSearchStep({
-      state: readyState(),
+describe("prepareWorkflow", () => {
+  it("binds one read-only Catalog search against the live document", () => {
+    const prepared = prepareWorkflow({
+      state: readyProvider("shop", "search_products", "shop.search_products"),
       workflowId: "wf_1",
+      origins,
       steps: [
         {
           providerId: "shop",
@@ -67,16 +79,81 @@ describe("prepareShopSearchStep", () => {
     });
     expect(prepared.ok).toBe(true);
     if (prepared.ok) {
-      expect(prepared.step.schemaFingerprint).toBe(fingerprint);
-      expect(prepared.step.providerInstanceId).toBe("shop_1");
+      expect(prepared.steps).toHaveLength(1);
+      expect(prepared.steps[0]?.schemaFingerprint).toBe(fingerprint);
+      expect(prepared.steps[0]?.origin).toBe(origins.shop);
     }
   });
 
-  it("rejects graphs that are not one Catalog search", () => {
-    const prepared = prepareShopSearchStep({
-      state: readyState(),
+  it("binds a Customers search then a Catalog search without both documents live", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
       workflowId: "wf_1",
+      origins,
       steps: [
+        {
+          providerId: "accounts",
+          tool: "search_customers",
+          arguments: { query: "ada" },
+        },
+        {
+          providerId: "shop",
+          tool: "search_products",
+          arguments: { query: "keyboard" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.steps.map((step) => step.namespacedName)).toEqual([
+        "accounts.search_customers",
+        "shop.search_products",
+      ]);
+      expect(prepared.steps[0]?.schemaFingerprint).toBeNull();
+      expect(prepared.steps[1]?.schemaFingerprint).toBeNull();
+    }
+  });
+
+  it("stamps a fingerprint only for the currently open provider", () => {
+    const prepared = prepareWorkflow({
+      state: readyProvider(
+        "accounts",
+        "search_customers",
+        "accounts.search_customers",
+      ),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "search_customers",
+          arguments: { query: "ada" },
+        },
+        {
+          providerId: "shop",
+          tool: "search_products",
+          arguments: { query: "keyboard" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.steps[0]?.schemaFingerprint).toBe(fingerprint);
+      expect(prepared.steps[1]?.schemaFingerprint).toBeNull();
+    }
+  });
+
+  it("rejects graphs longer than two steps", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "search_customers",
+          arguments: { query: "ada" },
+        },
         {
           providerId: "shop",
           tool: "search_products",
@@ -95,10 +172,30 @@ describe("prepareShopSearchStep", () => {
     }
   });
 
-  it("rejects unknown arguments", () => {
-    const prepared = prepareShopSearchStep({
-      state: readyState(),
+  it("rejects tools that are not on the pass allowlist", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
       workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "shop",
+          tool: "create_order",
+          arguments: { query: "keyboard" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(false);
+    if (!prepared.ok) {
+      expect(prepared.error.code).toBe("unsupported_graph");
+    }
+  });
+
+  it("rejects unknown arguments", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
       steps: [
         {
           providerId: "shop",
@@ -114,9 +211,10 @@ describe("prepareShopSearchStep", () => {
   });
 
   it("rejects empty queries", () => {
-    const prepared = prepareShopSearchStep({
-      state: readyState(),
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
       workflowId: "wf_1",
+      origins,
       steps: [
         {
           providerId: "shop",
@@ -130,14 +228,30 @@ describe("prepareShopSearchStep", () => {
       expect(prepared.error.code).toBe("unsupported_graph");
     }
   });
-});
 
-describe("revalidatePreparedStep", () => {
-  it("fails when the fingerprint changed", () => {
-    const state = readyState();
-    const prepared = prepareShopSearchStep({
+  it("rejects a live document that is missing the prepared tool", () => {
+    const instanceId = "shop_1";
+    let state = createInitialRuntimeState(account);
+    state = runtimeReducer(state, {
+      type: "provider/mount",
+      providerId: "shop",
+      instanceId,
+      origin: origins.shop,
+      entryUrl: `${origins.shop}/`,
+    });
+    state = runtimeReducer(state, {
+      type: "provider/loaded",
+      instanceId,
+    });
+    state = runtimeReducer(state, {
+      type: "provider/ready",
+      instanceId,
+      tools: [],
+    });
+    const prepared = prepareWorkflow({
       state,
       workflowId: "wf_1",
+      origins,
       steps: [
         {
           providerId: "shop",
@@ -146,7 +260,33 @@ describe("revalidatePreparedStep", () => {
         },
       ],
     });
+    expect(prepared.ok).toBe(false);
     if (!prepared.ok) {
+      expect(prepared.error.code).toBe("tool_not_found");
+    }
+  });
+});
+
+describe("revalidatePreparedStep", () => {
+  it("fails when the fingerprint changed", () => {
+    const state = readyProvider(
+      "shop",
+      "search_products",
+      "shop.search_products",
+    );
+    const prepared = prepareWorkflow({
+      state,
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "shop",
+          tool: "search_products",
+          arguments: { query: "keyboard" },
+        },
+      ],
+    });
+    if (!prepared.ok || !prepared.steps[0]) {
       throw new Error("expected prepare to succeed");
     }
     const changed = {
@@ -158,7 +298,7 @@ describe("revalidatePreparedStep", () => {
     };
     const revalidated = revalidatePreparedStep({
       state: changed,
-      step: prepared.step,
+      step: prepared.steps[0],
     });
     expect(revalidated.ok).toBe(false);
     if (!revalidated.ok) {

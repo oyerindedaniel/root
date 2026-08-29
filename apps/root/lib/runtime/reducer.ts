@@ -1,5 +1,6 @@
 import {
   createInitialRuntimeState,
+  emptyWorkflow,
   type RuntimeAction,
   type RuntimeState,
 } from "./state";
@@ -31,7 +32,6 @@ export function runtimeReducer(
           outcome: null,
         },
         discoveredTools: [],
-        workflow: createInitialRuntimeState(state.account).workflow,
       };
     case "provider/loaded":
       if (state.provider.instanceId !== action.instanceId) {
@@ -106,8 +106,7 @@ export function runtimeReducer(
         ...state,
         discoveredTools: [],
         workflow:
-          state.workflow.lifecycle === "prepared" ||
-          state.workflow.lifecycle === "executing"
+          state.workflow.lifecycle === "prepared"
             ? {
                 ...state.workflow,
                 lifecycle: "failed",
@@ -145,26 +144,31 @@ export function runtimeReducer(
     case "workflow/draft":
       return {
         ...state,
-        workflow: createInitialRuntimeState(state.account).workflow,
+        workflow: emptyWorkflow(state.account),
         provider: { ...state.provider, activeTool: null, outcome: null },
       };
-    case "workflow/prepared":
+    case "workflow/prepared": {
+      const step = action.steps[0] ?? null;
       return {
         ...state,
         workflow: {
           id: action.workflowId,
           lifecycle: "prepared",
-          step: action.step,
+          steps: action.steps,
+          currentStepIndex: 0,
+          step,
+          results: [],
           result: null,
           failureReason: null,
           evidence: null,
         },
         provider: {
           ...state.provider,
-          activeTool: action.step.namespacedName,
+          activeTool: step?.namespacedName ?? null,
           outcome: null,
         },
       };
+    }
     case "workflow/executing":
       if (state.workflow.id !== action.workflowId) {
         return state;
@@ -175,6 +179,24 @@ export function runtimeReducer(
         provider: { ...state.provider, lifecycle: "executing" },
         control: "agent",
       };
+    case "workflow/step": {
+      if (state.workflow.id !== action.workflowId) {
+        return state;
+      }
+      const step = state.workflow.steps[action.index] ?? null;
+      return {
+        ...state,
+        workflow: {
+          ...state.workflow,
+          currentStepIndex: action.index,
+          step,
+        },
+        provider: {
+          ...state.provider,
+          activeTool: step?.namespacedName ?? state.provider.activeTool,
+        },
+      };
+    }
     case "workflow/passed":
       if (state.workflow.id !== action.workflowId) {
         return state;
@@ -185,6 +207,7 @@ export function runtimeReducer(
           ...state.workflow,
           lifecycle: "passed",
           result: action.result,
+          results: action.results,
           evidence: action.evidence,
           failureReason: null,
         },

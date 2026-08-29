@@ -446,9 +446,8 @@ function pillLabel(
     return pin ? `Discovering ${pin.label}` : "Discovering";
   }
   if (state.workflow.lifecycle === "executing") {
-    return state.workflow.step
-      ? `Searching "${state.workflow.step.arguments.query}"`
-      : "Running";
+    const query = state.workflow.step?.arguments.query;
+    return typeof query === "string" ? `Searching "${query}"` : "Running";
   }
   return "Running";
 }
@@ -458,6 +457,7 @@ function inspectRows(state: RuntimeState, directory: ProviderDirectory) {
     ? pinForProvider(directory, state.provider.providerId)
     : null;
   const query = state.workflow.step?.arguments.query;
+  const queryLabel = typeof query === "string" ? query : null;
   const rows: { label: string; value: string }[] = [
     { label: "Provider", value: pin?.label ?? "None" },
     {
@@ -475,8 +475,8 @@ function inspectRows(state: RuntimeState, directory: ProviderDirectory) {
           : titleCase(state.workflow.lifecycle),
     },
   ];
-  if (query) {
-    rows.push({ label: "Query", value: query });
+  if (queryLabel) {
+    rows.push({ label: "Query", value: queryLabel });
   }
   if (state.workflow.evidence) {
     rows.push({ label: "Result", value: state.workflow.evidence });

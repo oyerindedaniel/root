@@ -102,7 +102,7 @@ async function registerGatewayTools(
       name: "prepare_workflow",
       title: "Prepare workflow",
       description:
-        "Prepare exactly one read-only Catalog search step bound to the current provider document.",
+        "Prepare one or two sequential read-only search steps against trusted providers.",
       inputSchema: {
         type: "object",
         properties: {
@@ -131,7 +131,7 @@ async function registerGatewayTools(
     {
       name: "execute_workflow",
       title: "Execute workflow",
-      description: "Execute a prepared Catalog search on the live Catalog document.",
+      description: "Execute a prepared read-only workflow on the live provider documents.",
       inputSchema: {
         type: "object",
         properties: {
@@ -160,7 +160,7 @@ async function registerGatewayTools(
     {
       name: "cancel_workflow",
       title: "Cancel workflow",
-      description: "Cancel the current Catalog search workflow.",
+      description: "Cancel the current workflow.",
       inputSchema: {
         type: "object",
         properties: {
@@ -189,7 +189,7 @@ async function registerGatewayTools(
     {
       name: "inspect_workflow",
       title: "Inspect workflow",
-      description: "Inspect the current Catalog search workflow and evidence.",
+      description: "Inspect the current workflow, steps, and recorded evidence.",
       inputSchema: {
         type: "object",
         properties: {

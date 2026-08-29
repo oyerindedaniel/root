@@ -1,7 +1,7 @@
 import type {
   Account,
   NormalizedToolDescriptor,
-  PreparedShopSearchStep,
+  PreparedWorkflowStep,
   ProviderId,
   ProviderLifecycle,
   ProviderPlacement,
@@ -34,7 +34,10 @@ export type RuntimeState = {
   workflow: {
     id: string | null;
     lifecycle: WorkflowLifecycle;
-    step: PreparedShopSearchStep | null;
+    steps: PreparedWorkflowStep[];
+    currentStepIndex: number;
+    step: PreparedWorkflowStep | null;
+    results: unknown[];
     result: unknown | null;
     failureReason: string | null;
     evidence: string | null;
@@ -70,9 +73,20 @@ export type RuntimeAction =
   | { type: "motion/finish"; placement: ProviderPlacement }
   | { type: "control/set"; control: ControlOwner }
   | { type: "workflow/draft" }
-  | { type: "workflow/prepared"; step: PreparedShopSearchStep; workflowId: string }
+  | {
+      type: "workflow/prepared";
+      steps: PreparedWorkflowStep[];
+      workflowId: string;
+    }
   | { type: "workflow/executing"; workflowId: string }
-  | { type: "workflow/passed"; workflowId: string; result: unknown; evidence: string }
+  | { type: "workflow/step"; workflowId: string; index: number }
+  | {
+      type: "workflow/passed";
+      workflowId: string;
+      result: unknown;
+      results: unknown[];
+      evidence: string;
+    }
   | { type: "workflow/failed"; workflowId?: string; reason: string }
   | { type: "workflow/cancelled"; workflowId: string }
   | { type: "workflow/invalidate" };
@@ -98,7 +112,10 @@ export function createInitialRuntimeState(account: Account): RuntimeState {
     workflow: {
       id: null,
       lifecycle: "draft",
+      steps: [],
+      currentStepIndex: 0,
       step: null,
+      results: [],
       result: null,
       failureReason: null,
       evidence: null,
@@ -106,4 +123,8 @@ export function createInitialRuntimeState(account: Account): RuntimeState {
     control: "human",
     motion: "idle",
   };
+}
+
+export function emptyWorkflow(account: Account) {
+  return createInitialRuntimeState(account).workflow;
 }

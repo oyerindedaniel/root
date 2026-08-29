@@ -2,12 +2,12 @@ import { z } from "zod";
 
 import {
   boundedResultEnvelopeSchema,
+  jsonObjectSchema,
   normalizedToolDescriptorSchema,
   originSchema,
   providerIdSchema,
   webmcpToolNameSchema,
 } from "./webmcp.js";
-import { searchProductsInputSchema } from "./shop.js";
 
 export const workflowExecutionIdSchema = z.string().min(1).max(80);
 
@@ -41,11 +41,15 @@ export const providerPlacementSchema = z.enum(["stage", "tray"]);
 
 export type ProviderPlacement = z.infer<typeof providerPlacementSchema>;
 
-export const shopSearchStepSchema = z.strictObject({
-  providerId: z.literal("shop"),
-  tool: z.literal("search_products"),
-  arguments: searchProductsInputSchema,
+export const MAX_PREPARED_WORKFLOW_STEPS = 2;
+
+export const proposedWorkflowStepSchema = z.strictObject({
+  providerId: providerIdSchema,
+  tool: webmcpToolNameSchema,
+  arguments: z.unknown(),
 });
+
+export type ProposedWorkflowStep = z.infer<typeof proposedWorkflowStepSchema>;
 
 export const prepareWorkflowInputSchema = z.object({
   steps: z.array(z.unknown()),
@@ -53,23 +57,25 @@ export const prepareWorkflowInputSchema = z.object({
 
 export type PrepareWorkflowInput = z.infer<typeof prepareWorkflowInputSchema>;
 
-export const preparedShopSearchStepSchema = z.object({
-  providerId: z.literal("shop"),
-  providerInstanceId: z.string().min(1),
+export const preparedWorkflowStepSchema = z.object({
+  providerId: providerIdSchema,
   origin: originSchema,
-  toolName: z.literal("search_products"),
-  namespacedName: z.literal("shop.search_products"),
-  schemaFingerprint: z.string().min(1),
-  arguments: searchProductsInputSchema,
+  toolName: webmcpToolNameSchema,
+  namespacedName: z.string().min(1).max(128),
+  schemaFingerprint: z.string().min(1).nullable(),
+  arguments: jsonObjectSchema,
   readOnly: z.literal(true),
 });
 
-export type PreparedShopSearchStep = z.infer<typeof preparedShopSearchStepSchema>;
+export type PreparedWorkflowStep = z.infer<typeof preparedWorkflowStepSchema>;
 
 export const preparedWorkflowSchema = z.object({
   workflowId: workflowExecutionIdSchema,
   lifecycle: z.literal("prepared"),
-  step: preparedShopSearchStepSchema,
+  steps: z
+    .array(preparedWorkflowStepSchema)
+    .min(1)
+    .max(MAX_PREPARED_WORKFLOW_STEPS),
 });
 
 export type PreparedWorkflow = z.infer<typeof preparedWorkflowSchema>;
@@ -109,7 +115,9 @@ export const inspectWorkflowInputSchema = z.object({
 export const inspectWorkflowOutputSchema = z.object({
   workflowId: workflowExecutionIdSchema,
   lifecycle: workflowLifecycleSchema,
-  step: preparedShopSearchStepSchema.nullable(),
+  steps: z.array(preparedWorkflowStepSchema),
+  step: preparedWorkflowStepSchema.nullable(),
+  results: z.array(z.unknown()),
   result: boundedResultEnvelopeSchema.nullable(),
   failureReason: z.string().max(280).nullable(),
 });
