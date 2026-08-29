@@ -8,28 +8,43 @@ import {
   inspectWorkflowInputSchema,
   parseToolExecuteInput,
   prepareWorkflowInputSchema,
+  type BoundedError,
   type BoundedResultEnvelope,
+  type CancelWorkflowInput,
+  type CancelWorkflowOutput,
   type DiscoverCapabilitiesInput,
+  type DiscoverCapabilitiesOutput,
+  type ExecuteWorkflowInput,
+  type ExecuteWorkflowOutput,
+  type InspectWorkflowInput,
   type InspectWorkflowOutput,
+  type ListProvidersOutput,
+  type PrepareWorkflowInput,
+  type PrepareWorkflowOutput,
 } from "@repo/contracts";
 import { useEffect, useRef } from "react";
 
 import { useIsomorphicLayoutEffect } from "@/lib/use-isomorphic-layout-effect";
 
 export type GatewayHandlers = {
+  listProviders: () => BoundedResultEnvelope<ListProvidersOutput>;
   discoverCapabilities: (
     input: DiscoverCapabilitiesInput,
     signal: AbortSignal,
-  ) => Promise<BoundedResultEnvelope>;
-  prepareWorkflow: (input: unknown) => BoundedResultEnvelope;
+  ) => Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>>;
+  prepareWorkflow: (
+    input: PrepareWorkflowInput,
+  ) => BoundedResultEnvelope<PrepareWorkflowOutput>;
   executeWorkflow: (
-    input: { workflowId: string },
+    input: ExecuteWorkflowInput,
     signal: AbortSignal,
-  ) => Promise<BoundedResultEnvelope>;
-  cancelWorkflow: (input: { workflowId: string }) => BoundedResultEnvelope;
+  ) => Promise<BoundedResultEnvelope<ExecuteWorkflowOutput>>;
+  cancelWorkflow: (
+    input: CancelWorkflowInput,
+  ) => BoundedResultEnvelope<CancelWorkflowOutput>;
   inspectWorkflow: (
-    input: { workflowId: string },
-  ) => InspectWorkflowOutput | BoundedResultEnvelope;
+    input: InspectWorkflowInput,
+  ) => InspectWorkflowOutput | BoundedError;
 };
 
 export function GatewayRegistrar(handlers: GatewayHandlers) {
@@ -52,7 +67,7 @@ export function GatewayRegistrar(handlers: GatewayHandlers) {
   return null;
 }
 
-async function registerGatewayTools(
+export async function registerGatewayTools(
   signal: AbortSignal,
   handlersRef: { current: GatewayHandlers },
 ) {
@@ -63,16 +78,32 @@ async function registerGatewayTools(
 
   await context.registerTool(
     {
+      name: "list_providers",
+      title: "List providers",
+      description:
+        "List configured provider IDs and whether each is workflow-ready or discovery-only.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      execute: async () => handlersRef.current.listProviders(),
+    },
+    { signal },
+  );
+
+  await context.registerTool(
+    {
       name: "discover_capabilities",
       title: "Discover capabilities",
       description:
-        "Mount a trusted provider and discover its current WebMCP tools.",
+        "Mount a configured provider and discover its current WebMCP tools.",
       inputSchema: {
         type: "object",
         properties: {
           providerId: {
             type: "string",
-            description: "Trusted provider id. shop or accounts.",
+            description: "Configured provider ID from list_providers.",
           },
         },
         required: ["providerId"],
@@ -85,7 +116,7 @@ async function registerGatewayTools(
         if (!parsed.success) {
           return boundedError(
             "invalid_arguments",
-            "discover_capabilities requires providerId shop or accounts.",
+            "discover_capabilities requires a configured providerId.",
           );
         }
         return handlersRef.current.discoverCapabilities(
@@ -118,7 +149,7 @@ async function registerGatewayTools(
         if (!parsed.success) {
           return boundedError(
             "invalid_arguments",
-            "prepare_workflow requires a steps array.",
+            "prepare_workflow requires one or two allowlisted search steps.",
           );
         }
         return handlersRef.current.prepareWorkflow(parsed.data);

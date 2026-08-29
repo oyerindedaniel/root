@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
   boundedError,
   namespacedToolName,
   normalizeInputSchema,
   parseJsonObject,
+  providerIdSchema,
   schemaFingerprint,
   serializeExecuteInput,
   toolHandleKey,
@@ -65,6 +66,9 @@ describe("fingerprints and namespacing", () => {
     expect(namespacedToolName("accounts", "search_customers")).toBe(
       "accounts.search_customers",
     );
+    expectTypeOf(namespacedToolName("shop", "search_products")).toEqualTypeOf<
+      "shop.search_products"
+    >();
   });
 
   it("keys handles by instance origin and name", () => {
@@ -85,5 +89,15 @@ describe("bounded errors and shop input", () => {
     expect(boundedError("unsupported_graph", "Only one step.").code).toBe(
       "unsupported_graph",
     );
+  });
+});
+
+describe("provider identities", () => {
+  it("accepts bounded dynamic provider keys", () => {
+    expect(providerIdSchema.parse("custom-analytics-1")).toBe(
+      "custom-analytics-1",
+    );
+    expect(providerIdSchema.safeParse("Shop").success).toBe(false);
+    expect(providerIdSchema.safeParse(`a${"b".repeat(64)}`).success).toBe(false);
   });
 });

@@ -1,11 +1,12 @@
 import type {
   Account,
+  GatewayErrorCode,
   NormalizedToolDescriptor,
   PreparedWorkflowStep,
   ProviderId,
   ProviderLifecycle,
   ProviderPlacement,
-  WorkflowLifecycle,
+  WorkflowStepResult,
 } from "@repo/contracts";
 
 export type SessionStatus = "authenticated" | "signed-out";
@@ -13,6 +14,80 @@ export type SessionStatus = "authenticated" | "signed-out";
 export type WebmcpStatus = "unknown" | "available" | "unavailable";
 
 export type ControlOwner = "human" | "agent";
+
+export type WorkflowDraft = {
+  lifecycle: "draft";
+  id: null;
+  steps: [];
+  currentStepIndex: 0;
+  step: null;
+  results: [];
+  evidence: null;
+  failureReason: null;
+};
+
+export type WorkflowPrepared = {
+  lifecycle: "prepared";
+  id: string;
+  steps: PreparedWorkflowStep[];
+  currentStepIndex: number;
+  step: PreparedWorkflowStep | null;
+  results: [];
+  evidence: null;
+  failureReason: null;
+};
+
+export type WorkflowExecuting = {
+  lifecycle: "executing";
+  id: string;
+  steps: PreparedWorkflowStep[];
+  currentStepIndex: number;
+  step: PreparedWorkflowStep | null;
+  results: WorkflowStepResult[];
+  evidence: string | null;
+  failureReason: null;
+};
+
+export type WorkflowPassed = {
+  lifecycle: "passed";
+  id: string;
+  steps: PreparedWorkflowStep[];
+  currentStepIndex: number;
+  step: PreparedWorkflowStep | null;
+  results: WorkflowStepResult[];
+  evidence: string;
+  failureReason: null;
+};
+
+export type WorkflowFailed = {
+  lifecycle: "failed";
+  id: string | null;
+  steps: PreparedWorkflowStep[];
+  currentStepIndex: number;
+  step: PreparedWorkflowStep | null;
+  results: WorkflowStepResult[];
+  evidence: string | null;
+  failureReason: GatewayErrorCode;
+};
+
+export type WorkflowCancelled = {
+  lifecycle: "cancelled";
+  id: string;
+  steps: PreparedWorkflowStep[];
+  currentStepIndex: number;
+  step: PreparedWorkflowStep | null;
+  results: WorkflowStepResult[];
+  evidence: string | null;
+  failureReason: "cancelled";
+};
+
+export type WorkflowState =
+  | WorkflowDraft
+  | WorkflowPrepared
+  | WorkflowExecuting
+  | WorkflowPassed
+  | WorkflowFailed
+  | WorkflowCancelled;
 
 export type RuntimeState = {
   sessionStatus: SessionStatus;
@@ -26,22 +101,12 @@ export type RuntimeState = {
     lifecycle: ProviderLifecycle;
     placement: ProviderPlacement;
     activeTool: string | null;
-    failureReason: string | null;
+    failureReason: GatewayErrorCode | null;
     iframeRevision: number;
     outcome: string | null;
   };
   discoveredTools: NormalizedToolDescriptor[];
-  workflow: {
-    id: string | null;
-    lifecycle: WorkflowLifecycle;
-    steps: PreparedWorkflowStep[];
-    currentStepIndex: number;
-    step: PreparedWorkflowStep | null;
-    results: unknown[];
-    result: unknown | null;
-    failureReason: string | null;
-    evidence: string | null;
-  };
+  workflow: WorkflowState;
   control: ControlOwner;
   motion: "idle" | "suction";
 };
@@ -65,7 +130,7 @@ export type RuntimeAction =
       tools: NormalizedToolDescriptor[];
     }
   | { type: "provider/active"; instanceId: string }
-  | { type: "provider/failed"; instanceId?: string; reason: string }
+  | { type: "provider/failed"; instanceId?: string; reason: GatewayErrorCode }
   | { type: "provider/unmount" }
   | { type: "handles/invalidate"; instanceId: string }
   | { type: "placement/request"; placement: ProviderPlacement }
@@ -83,13 +148,41 @@ export type RuntimeAction =
   | {
       type: "workflow/passed";
       workflowId: string;
-      result: unknown;
-      results: unknown[];
+      results: WorkflowStepResult[];
       evidence: string;
     }
-  | { type: "workflow/failed"; workflowId?: string; reason: string }
+  | { type: "workflow/failed"; workflowId?: string; reason: GatewayErrorCode }
   | { type: "workflow/cancelled"; workflowId: string }
   | { type: "workflow/invalidate" };
+
+export function createDraftWorkflow(): WorkflowDraft {
+  return {
+    lifecycle: "draft",
+    id: null,
+    steps: [],
+    currentStepIndex: 0,
+    step: null,
+    results: [],
+    evidence: null,
+    failureReason: null,
+  };
+}
+
+export function toFailedWorkflow(
+  workflow: WorkflowState,
+  reason: GatewayErrorCode,
+): WorkflowFailed {
+  return {
+    lifecycle: "failed",
+    id: workflow.id,
+    steps: [...workflow.steps],
+    currentStepIndex: workflow.currentStepIndex,
+    step: workflow.step,
+    results: [...workflow.results],
+    evidence: workflow.evidence,
+    failureReason: reason,
+  };
+}
 
 export function createInitialRuntimeState(account: Account): RuntimeState {
   return {
@@ -109,22 +202,12 @@ export function createInitialRuntimeState(account: Account): RuntimeState {
       outcome: null,
     },
     discoveredTools: [],
-    workflow: {
-      id: null,
-      lifecycle: "draft",
-      steps: [],
-      currentStepIndex: 0,
-      step: null,
-      results: [],
-      result: null,
-      failureReason: null,
-      evidence: null,
-    },
+    workflow: createDraftWorkflow(),
     control: "human",
     motion: "idle",
   };
 }
 
-export function emptyWorkflow(account: Account) {
-  return createInitialRuntimeState(account).workflow;
+export function emptyWorkflow() {
+  return createDraftWorkflow();
 }

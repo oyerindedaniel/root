@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   DirectoryError,
-  getTrustedProvider,
+  getBuiltinProvider,
   loadProviderDirectory,
-  pinForProvider,
 } from "./directory";
 
 const env = {
@@ -16,26 +15,20 @@ const env = {
 };
 
 describe("loadProviderDirectory", () => {
-  it("loads trusted shop and accounts entries and ordered pins", () => {
+  it("loads immutable workflow-ready shop and accounts entries", () => {
     const directory = loadProviderDirectory(env);
-    expect(directory.providers.shop.providerId).toBe("shop");
-    expect(directory.providers.shop.origin).toBe("http://localhost:3002");
-    expect(directory.providers.shop.expectedTools).toEqual(["search_products"]);
-    expect(directory.providers.accounts.providerId).toBe("accounts");
-    expect(directory.providers.accounts.origin).toBe("http://localhost:3001");
-    expect(directory.providers.accounts.expectedTools).toEqual([
+    const shop = getBuiltinProvider(directory, "shop");
+    const accounts = getBuiltinProvider(directory, "accounts");
+    expect(shop.origin).toBe("http://localhost:3002");
+    expect(shop.expectedTools).toEqual(["search_products"]);
+    expect(shop.source).toBe("builtin");
+    expect(shop.capability).toBe("workflow-ready");
+    expect(accounts.origin).toBe("http://localhost:3001");
+    expect(accounts.expectedTools).toEqual([
       "search_customers",
     ]);
-    expect(directory.pins.map((pin) => pin.id)).toEqual([
-      "customers",
-      "shop",
-      "cases",
-    ]);
-    expect(pinForProvider(directory, "shop").label).toBe("Catalog");
-    expect(pinForProvider(directory, "accounts").label).toBe("Customers");
-    expect(
-      directory.pins.filter((pin) => pin.providerId).map((pin) => pin.providerId),
-    ).toEqual(["accounts", "shop"]);
+    expect(shop.label).toBe("Catalog");
+    expect(accounts.label).toBe("Customers");
   });
 
   it("rejects a missing env value", () => {
@@ -57,19 +50,19 @@ describe("loadProviderDirectory", () => {
   });
 });
 
-describe("getTrustedProvider", () => {
+describe("getBuiltinProvider", () => {
   it("looks up shop and accounts by id", () => {
     const directory = loadProviderDirectory(env);
-    expect(getTrustedProvider(directory, "shop").providerId).toBe("shop");
-    expect(getTrustedProvider(directory, "accounts").providerId).toBe(
+    expect(getBuiltinProvider(directory, "shop").providerId).toBe("shop");
+    expect(getBuiltinProvider(directory, "accounts").providerId).toBe(
       "accounts",
     );
   });
 
   it("rejects unknown providers", () => {
     const directory = loadProviderDirectory(env);
-    expect(() => getTrustedProvider(directory, "support")).toThrow(
-      /not in the trusted directory/,
+    expect(() => getBuiltinProvider(directory, "support")).toThrow(
+      /not in the built-in directory/,
     );
   });
 });

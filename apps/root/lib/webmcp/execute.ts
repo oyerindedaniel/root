@@ -9,7 +9,7 @@ export async function executeRegisteredTool(options: {
   modelContext: ModelContext;
   tool: RegisteredTool;
   invokeKind: InvokeKind;
-  input: Record<string, unknown>;
+  input: object;
   signal: AbortSignal;
 }): Promise<string> {
   const serialized = serializeExecuteInput(options.invokeKind, options.input);

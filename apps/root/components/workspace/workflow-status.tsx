@@ -13,7 +13,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { cn } from "@repo/ui/lib/cn";
 
-import { pinForProvider, type ProviderDirectory } from "@/lib/providers/directory";
+import { WorkflowPanel } from "@/components/workspace/workflow-panel";
+import {
+  providerKey,
+  type ProviderCatalog,
+} from "@/lib/providers/catalog";
+import { useProviderLibrary } from "@/lib/providers/provider-library";
 import { useRuntime } from "@/lib/runtime/runtime-context";
 import type { RuntimeState } from "@/lib/runtime/state";
 import {
@@ -51,7 +56,8 @@ function positionedCanvas(node: HTMLElement | null) {
 }
 
 export function WorkflowStatus() {
-  const { state, directory } = useRuntime();
+  const { state } = useRuntime();
+  const { catalog } = useProviderLibrary();
   const reduceMotion = useReducedMotion();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -64,7 +70,7 @@ export function WorkflowStatus() {
   const dragging = useRef(false);
   const hadLabel = useRef(false);
   const { running, failed } = indicatorActivity(state, issueHidden);
-  const nextLabel = pillLabel(state, directory, running, failed);
+  const nextLabel = pillLabel(state, catalog, running, failed);
   const [content, setContent] = useState<{
     label: string;
     running: boolean;
@@ -206,7 +212,7 @@ export function WorkflowStatus() {
     snapFromPointer();
   }
 
-  const rows = inspectRows(state, directory);
+  const rows = inspectRows(state, catalog);
 
   return (
     <motion.div
@@ -360,22 +366,14 @@ export function WorkflowStatus() {
                   : "top left",
             }}
             className={cn(
-              "absolute w-56 rounded-2xl bg-black/90 p-2 text-sm text-white shadow-[0_12px_40px_rgb(0_0_0_/_0.4)] ring-1 ring-white/12",
+              "absolute w-96 overflow-hidden rounded-2xl bg-black/90 text-sm text-white shadow-[0_12px_40px_rgb(0_0_0_/_0.4)] ring-1 ring-white/12",
               bottom ? "bottom-[calc(100%+0.5rem)]" : "top-[calc(100%+0.5rem)]",
               right ? "right-0" : "left-0",
             )}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            {rows.map((row) => (
-              <div
-                key={row.label}
-                className="flex h-8 items-center justify-between gap-3 px-2"
-              >
-                <span>{row.label}</span>
-                <span className="min-w-0 truncate text-white/55">{row.value}</span>
-              </div>
-            ))}
+            <WorkflowPanel rows={rows} />
           </motion.div>
         ) : null}
       </AnimatePresence>
@@ -423,7 +421,7 @@ function OscillatingDots({ reduceMotion }: { reduceMotion: boolean }) {
 
 function pillLabel(
   state: RuntimeState,
-  directory: ProviderDirectory,
+  catalog: ProviderCatalog,
   running: boolean,
   failed: boolean,
 ) {
@@ -436,30 +434,25 @@ function pillLabel(
   if (!running) {
     return null;
   }
-  const pin = state.provider.providerId
-    ? pinForProvider(directory, state.provider.providerId)
-    : null;
+  const provider = currentProvider(catalog, state.provider.providerId);
   if (state.provider.lifecycle === "mounting") {
-    return pin ? `Opening ${pin.label}` : "Opening";
+    return provider ? `Opening ${provider.label}` : "Opening";
   }
   if (state.provider.lifecycle === "discovering") {
-    return pin ? `Discovering ${pin.label}` : "Discovering";
+    return provider ? `Discovering ${provider.label}` : "Discovering";
   }
   if (state.workflow.lifecycle === "executing") {
     const query = state.workflow.step?.arguments.query;
-    return typeof query === "string" ? `Searching "${query}"` : "Running";
+    return query ? `Searching "${query}"` : "Running";
   }
   return "Running";
 }
 
-function inspectRows(state: RuntimeState, directory: ProviderDirectory) {
-  const pin = state.provider.providerId
-    ? pinForProvider(directory, state.provider.providerId)
-    : null;
-  const query = state.workflow.step?.arguments.query;
-  const queryLabel = typeof query === "string" ? query : null;
+function inspectRows(state: RuntimeState, catalog: ProviderCatalog) {
+  const provider = currentProvider(catalog, state.provider.providerId);
+  const query = state.workflow.step?.arguments.query ?? null;
   const rows: { label: string; value: string }[] = [
-    { label: "Provider", value: pin?.label ?? "None" },
+    { label: "Provider", value: provider?.label ?? "None" },
     {
       label: "App",
       value:
@@ -475,8 +468,8 @@ function inspectRows(state: RuntimeState, directory: ProviderDirectory) {
           : titleCase(state.workflow.lifecycle),
     },
   ];
-  if (queryLabel) {
-    rows.push({ label: "Query", value: queryLabel });
+  if (query) {
+    rows.push({ label: "Query", value: query });
   }
   if (state.workflow.evidence) {
     rows.push({ label: "Result", value: state.workflow.evidence });
@@ -487,6 +480,15 @@ function inspectRows(state: RuntimeState, directory: ProviderDirectory) {
     rows.push({ label: "Issue", value: issue });
   }
   return rows;
+}
+
+function currentProvider(
+  catalog: ProviderCatalog,
+  providerId: string | null,
+) {
+  return providerId
+    ? catalog.providers.find((provider) => providerKey(provider) === providerId)
+    : undefined;
 }
 
 function titleCase(value: string) {

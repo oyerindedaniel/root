@@ -191,6 +191,25 @@ describe("prepareWorkflow", () => {
     }
   });
 
+  it("rejects custom providers even when they claim a built-in tool name", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "custom-analytics-1",
+          tool: "search_products",
+          arguments: { query: "keyboard" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(false);
+    if (!prepared.ok) {
+      expect(prepared.error.code).toBe("unsupported_graph");
+    }
+  });
+
   it("rejects unknown arguments", () => {
     const prepared = prepareWorkflow({
       state: createInitialRuntimeState(account),

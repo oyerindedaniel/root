@@ -1,8 +1,13 @@
 import {
+  createDraftWorkflow,
   createInitialRuntimeState,
-  emptyWorkflow,
+  toFailedWorkflow,
   type RuntimeAction,
   type RuntimeState,
+  type WorkflowCancelled,
+  type WorkflowExecuting,
+  type WorkflowPassed,
+  type WorkflowPrepared,
 } from "./state";
 
 export function runtimeReducer(
@@ -107,11 +112,7 @@ export function runtimeReducer(
         discoveredTools: [],
         workflow:
           state.workflow.lifecycle === "prepared"
-            ? {
-                ...state.workflow,
-                lifecycle: "failed",
-                failureReason: "stale_handle",
-              }
+            ? toFailedWorkflow(state.workflow, "stale_handle")
             : state.workflow,
       };
     case "placement/request":
@@ -144,24 +145,24 @@ export function runtimeReducer(
     case "workflow/draft":
       return {
         ...state,
-        workflow: emptyWorkflow(state.account),
+        workflow: createDraftWorkflow(),
         provider: { ...state.provider, activeTool: null, outcome: null },
       };
     case "workflow/prepared": {
       const step = action.steps[0] ?? null;
+      const workflow: WorkflowPrepared = {
+        lifecycle: "prepared",
+        id: action.workflowId,
+        steps: action.steps,
+        currentStepIndex: 0,
+        step,
+        results: [],
+        evidence: null,
+        failureReason: null,
+      };
       return {
         ...state,
-        workflow: {
-          id: action.workflowId,
-          lifecycle: "prepared",
-          steps: action.steps,
-          currentStepIndex: 0,
-          step,
-          results: [],
-          result: null,
-          failureReason: null,
-          evidence: null,
-        },
+        workflow,
         provider: {
           ...state.provider,
           activeTool: step?.namespacedName ?? null,
@@ -169,16 +170,28 @@ export function runtimeReducer(
         },
       };
     }
-    case "workflow/executing":
+    case "workflow/executing": {
       if (state.workflow.id !== action.workflowId) {
         return state;
       }
+      const current = state.workflow;
+      const workflow: WorkflowExecuting = {
+        lifecycle: "executing",
+        id: action.workflowId,
+        steps: [...current.steps],
+        currentStepIndex: current.currentStepIndex,
+        step: current.step,
+        results: [...current.results],
+        evidence: current.evidence,
+        failureReason: null,
+      };
       return {
         ...state,
-        workflow: { ...state.workflow, lifecycle: "executing" },
+        workflow,
         provider: { ...state.provider, lifecycle: "executing" },
         control: "agent",
       };
+    }
     case "workflow/step": {
       if (state.workflow.id !== action.workflowId) {
         return state;
@@ -197,20 +210,24 @@ export function runtimeReducer(
         },
       };
     }
-    case "workflow/passed":
+    case "workflow/passed": {
       if (state.workflow.id !== action.workflowId) {
         return state;
       }
+      const current = state.workflow;
+      const workflow: WorkflowPassed = {
+        lifecycle: "passed",
+        id: action.workflowId,
+        steps: [...current.steps],
+        currentStepIndex: current.currentStepIndex,
+        step: current.step,
+        results: action.results,
+        evidence: action.evidence,
+        failureReason: null,
+      };
       return {
         ...state,
-        workflow: {
-          ...state.workflow,
-          lifecycle: "passed",
-          result: action.result,
-          results: action.results,
-          evidence: action.evidence,
-          failureReason: null,
-        },
+        workflow,
         provider: {
           ...state.provider,
           lifecycle: state.provider.placement === "stage" ? "active" : "ready",
@@ -218,17 +235,14 @@ export function runtimeReducer(
         },
         control: "human",
       };
+    }
     case "workflow/failed":
       if (action.workflowId && state.workflow.id !== action.workflowId) {
         return state;
       }
       return {
         ...state,
-        workflow: {
-          ...state.workflow,
-          lifecycle: "failed",
-          failureReason: action.reason,
-        },
+        workflow: toFailedWorkflow(state.workflow, action.reason),
         provider: {
           ...state.provider,
           lifecycle:
@@ -249,17 +263,27 @@ export function runtimeReducer(
         },
         control: "human",
       };
-    case "workflow/cancelled":
+    case "workflow/cancelled": {
       if (state.workflow.id !== action.workflowId) {
         return state;
       }
+      const current = state.workflow;
+      if (current.id === null) {
+        return state;
+      }
+      const workflow: WorkflowCancelled = {
+        lifecycle: "cancelled",
+        id: current.id,
+        steps: [...current.steps],
+        currentStepIndex: current.currentStepIndex,
+        step: current.step,
+        results: [...current.results],
+        evidence: current.evidence,
+        failureReason: "cancelled",
+      };
       return {
         ...state,
-        workflow: {
-          ...state.workflow,
-          lifecycle: "cancelled",
-          failureReason: "cancelled",
-        },
+        workflow,
         provider: {
           ...state.provider,
           lifecycle: state.provider.placement === "stage" ? "active" : "ready",
@@ -267,14 +291,11 @@ export function runtimeReducer(
         },
         control: "human",
       };
+    }
     case "workflow/invalidate":
       return {
         ...state,
-        workflow: {
-          ...state.workflow,
-          lifecycle: "failed",
-          failureReason: "revalidation_failed",
-        },
+        workflow: toFailedWorkflow(state.workflow, "revalidation_failed"),
       };
     default:
       return state;

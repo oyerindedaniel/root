@@ -15,7 +15,9 @@ export class DiscoveryTimeoutError extends Error {
 export async function discoverTools(options: {
   modelContext: ModelContext;
   origin: string;
-  expectedNames: readonly string[];
+  discovery:
+    | { mode: "builtin"; expectedNames: readonly string[] }
+    | { mode: "custom" };
   signal: AbortSignal;
   timeoutMs?: number;
   pollMs?: number;
@@ -27,15 +29,21 @@ export async function discoverTools(options: {
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? sleepWithSignal;
   const deadline = now() + timeoutMs;
-  const expected = new Set(options.expectedNames);
+  const expected =
+    options.discovery.mode === "builtin"
+      ? new Set(options.discovery.expectedNames)
+      : null;
 
   const match = async () => {
     const tools = await options.modelContext.getTools({
       fromOrigins: [options.origin],
     });
-    return tools.filter(
-      (tool) => tool.origin === options.origin && expected.has(tool.name),
-    );
+    return tools.filter((tool) => {
+      if (tool.origin !== options.origin) {
+        return false;
+      }
+      return expected ? expected.has(tool.name) : true;
+    });
   };
 
   const onToolChange = () => undefined;
@@ -45,7 +53,7 @@ export async function discoverTools(options: {
     while (now() <= deadline) {
       options.signal.throwIfAborted();
       const found = await match();
-      if (found.length >= expected.size) {
+      if (found.length >= (expected?.size ?? 1)) {
         return found;
       }
       if (now() + pollMs > deadline) {

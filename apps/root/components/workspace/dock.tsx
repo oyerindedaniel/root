@@ -7,7 +7,6 @@ import {
   useRef,
   type ComponentProps,
   type PointerEvent as ReactPointerEvent,
-  type PropsWithChildren,
 } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import type { MotionValue } from "motion/react";
@@ -67,7 +66,10 @@ function useDockMotion(index: number) {
   return { scale, slotWidth, zIndex };
 }
 
-export function DockRoot({ children }: PropsWithChildren) {
+export function DockRoot({
+  children,
+  ...props
+}: Omit<ComponentProps<"nav">, "className">) {
   const navRef = useRef<HTMLElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const watching = useRef(false);
@@ -161,6 +163,7 @@ export function DockRoot({ children }: PropsWithChildren) {
     <DockContext.Provider value={{ pointerX, hovering, rowLeft, rowWidth }}>
       <nav
         ref={navRef}
+        {...props}
         className="absolute inset-x-0 bottom-3 z-20 flex justify-center overflow-visible"
         aria-label="Providers"
         data-caliper-id="root-dock"
@@ -192,13 +195,15 @@ export function DockRoot({ children }: PropsWithChildren) {
 export function DockItem({
   index,
   children,
-}: PropsWithChildren<{
+  ...props
+}: Omit<ComponentProps<typeof motion.div>, "className" | "style"> & {
   index: number;
-}>) {
+}) {
   const { scale, slotWidth, zIndex } = useDockMotion(index);
   return (
     <DockItemContext.Provider value={{ scale }}>
       <motion.div
+        {...props}
         className="relative h-14 overflow-visible"
         style={{ width: slotWidth, zIndex }}
       >

@@ -1,23 +1,21 @@
 import {
   boundedError,
   MAX_PREPARED_WORKFLOW_STEPS,
-  namespacedToolName,
-  preparedWorkflowStepSchema,
-  proposedWorkflowStepSchema,
+  type BuiltinWorkflowProviderId,
   type BoundedError,
   type NormalizedToolDescriptor,
   type PreparedWorkflowStep,
   type ProviderId,
 } from "@repo/contracts";
 
-import { getPassReadTool } from "./pass-tools";
+import { bindPassReadStep } from "./pass-tools";
 import type { RuntimeState } from "./state";
 
 export function prepareWorkflow(options: {
   state: RuntimeState;
   steps: unknown[];
   workflowId: string;
-  origins: Record<ProviderId, string>;
+  origins: Record<BuiltinWorkflowProviderId, string>;
 }):
   | { ok: true; workflowId: string; steps: PreparedWorkflowStep[] }
   | { ok: false; error: BoundedError } {
@@ -114,48 +112,23 @@ export function revalidatePreparedStep(options: {
 function bindProposedStep(options: {
   raw: unknown;
   state: RuntimeState;
-  origins: Record<ProviderId, string>;
+  origins: Record<BuiltinWorkflowProviderId, string>;
 }):
   | { ok: true; step: PreparedWorkflowStep }
   | { ok: false; error: BoundedError } {
-  const proposed = proposedWorkflowStepSchema.safeParse(options.raw);
-  if (!proposed.success) {
+  const binding = bindPassReadStep(options.raw);
+  if (!binding) {
     return {
       ok: false,
       error: boundedError(
         "unsupported_graph",
-        "Each step needs providerId, tool, and arguments.",
+        "Each step needs an allowlisted provider, tool, and arguments.",
       ),
     };
   }
+  const proposed = binding.proposed;
 
-  const namespacedName = namespacedToolName(
-    proposed.data.providerId,
-    proposed.data.tool,
-  );
-  const spec = getPassReadTool(namespacedName);
-  if (!spec || spec.providerId !== proposed.data.providerId) {
-    return {
-      ok: false,
-      error: boundedError(
-        "unsupported_graph",
-        "Only allowlisted read-only search tools are supported in this pass.",
-      ),
-    };
-  }
-
-  const parsedArgs = spec.input.safeParse(proposed.data.arguments);
-  if (!parsedArgs.success) {
-    return {
-      ok: false,
-      error: boundedError(
-        "unsupported_graph",
-        "Step arguments do not match the tool contract.",
-      ),
-    };
-  }
-
-  const origin = options.origins[proposed.data.providerId];
+  const origin = options.origins[proposed.providerId];
   if (!origin) {
     return {
       ok: false,
@@ -167,18 +140,18 @@ function bindProposedStep(options: {
   }
 
   let schemaFingerprint: string | null = null;
-  if (isLiveProvider(options.state, proposed.data.providerId, origin)) {
+  if (isLiveProvider(options.state, proposed.providerId, origin)) {
     const tool = findDiscoveredTool(
       options.state.discoveredTools,
-      proposed.data.providerId,
-      proposed.data.tool,
+      proposed.providerId,
+      proposed.tool,
     );
     if (!tool) {
       return {
         ok: false,
         error: boundedError(
           "tool_not_found",
-          `${namespacedName} is not currently registered.`,
+          `${proposed.providerId}.${proposed.tool} is not currently registered.`,
         ),
       };
     }
@@ -196,15 +169,7 @@ function bindProposedStep(options: {
 
   return {
     ok: true,
-    step: preparedWorkflowStepSchema.parse({
-      providerId: proposed.data.providerId,
-      origin,
-      toolName: proposed.data.tool,
-      namespacedName,
-      schemaFingerprint,
-      arguments: parsedArgs.data,
-      readOnly: true,
-    }),
+    step: binding.freeze(origin, schemaFingerprint),
   };
 }
 

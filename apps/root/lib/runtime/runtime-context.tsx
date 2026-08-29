@@ -8,7 +8,11 @@ import {
   type Dispatch,
   type RefObject,
 } from "react";
-import type { Account } from "@repo/contracts";
+import type {
+  Account,
+  BoundedResultEnvelope,
+  DiscoverCapabilitiesOutput,
+} from "@repo/contracts";
 
 import type { ProviderDirectory } from "@/lib/providers/directory";
 import type { RuntimeAction, RuntimeState } from "@/lib/runtime/state";
@@ -29,6 +33,9 @@ export type RuntimeApi = {
   openProvider: (providerId: string) => void;
   closeProvider: () => void;
   activateProvider: (providerId: string) => void;
+  testProvider: (
+    providerId: string,
+  ) => Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>>;
   windowSession: WindowSession;
 };
 

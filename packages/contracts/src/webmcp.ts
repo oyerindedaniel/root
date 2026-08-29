@@ -2,7 +2,11 @@ import { z } from "zod";
 
 import { stableStringify } from "./stable-json.js";
 
-export const providerIdSchema = z.enum(["shop", "accounts"]);
+export const providerIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z][a-z0-9-]*$/);
 
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
@@ -36,6 +40,8 @@ export const contractVersionSchema = z
   .string()
   .regex(/^\d+\.\d+\.\d+$/);
 
+export type ContractVersion = z.infer<typeof contractVersionSchema>;
+
 export const invokeKindSchema = z.enum(["object", "json-string"]);
 
 export type InvokeKind = z.infer<typeof invokeKindSchema>;
@@ -49,7 +55,7 @@ export const webmcpAnnotationsSchema = z.object({
 
 export const normalizedToolDescriptorSchema = z.object({
   providerId: providerIdSchema,
-  namespacedName: z.string().min(1).max(128),
+  namespacedName: z.string().min(1).max(129),
   name: webmcpToolNameSchema,
   title: z.string().min(1).max(120),
   description: z.string().min(1).max(500),
@@ -65,35 +71,66 @@ export type NormalizedToolDescriptor = z.infer<
   typeof normalizedToolDescriptorSchema
 >;
 
+export const gatewayErrorCodeSchema = z.enum([
+  "invalid_arguments",
+  "unsupported_graph",
+  "tool_not_found",
+  "revalidation_failed",
+  "webmcp_unavailable",
+  "discovery_timeout",
+  "discovery_failed",
+  "cancelled",
+  "execution_failed",
+  "workflow_not_prepared",
+  "workflow_not_found",
+  "missing_env",
+  "invalid_entry_url",
+  "entry_origin_mismatch",
+  "unknown_provider",
+  "stale_handle",
+]);
+
+export type GatewayErrorCode = z.infer<typeof gatewayErrorCodeSchema>;
+
 export const boundedErrorSchema = z.object({
   status: z.literal("error"),
-  code: z.string().min(1).max(64),
+  code: gatewayErrorCodeSchema,
   message: z.string().min(1).max(280),
 });
 
-export type BoundedError = z.infer<typeof boundedErrorSchema>;
+export type BoundedError<TCode extends GatewayErrorCode = GatewayErrorCode> = {
+  status: "error";
+  code: TCode;
+  message: string;
+};
 
 export const boundedSuccessSchema = z.object({
   status: z.literal("success"),
   data: z.unknown(),
 });
 
-export type BoundedSuccess = z.infer<typeof boundedSuccessSchema>;
+export type BoundedSuccess<TData = unknown> = {
+  status: "success";
+  data: TData;
+};
 
 export const boundedResultEnvelopeSchema = z.discriminatedUnion("status", [
   boundedSuccessSchema,
   boundedErrorSchema,
 ]);
 
-export type BoundedResultEnvelope = z.infer<typeof boundedResultEnvelopeSchema>;
+export type BoundedResultEnvelope<
+  TData = unknown,
+  TCode extends GatewayErrorCode = GatewayErrorCode,
+> = BoundedSuccess<TData> | BoundedError<TCode>;
 
 export const SHOP_EXPECTED_TOOLS = ["search_products"] as const;
 
-export const SHOP_CONTRACT_VERSION = "1.0.0";
+export const SHOP_CONTRACT_VERSION = "1.0.0" satisfies ContractVersion;
 
 export const ACCOUNTS_EXPECTED_TOOLS = ["search_customers"] as const;
 
-export const ACCOUNTS_CONTRACT_VERSION = "1.0.0";
+export const ACCOUNTS_CONTRACT_VERSION = "1.0.0" satisfies ContractVersion;
 
 export const WEBMCP_DISCOVERY_TIMEOUT_MS = 8_000;
 
@@ -101,10 +138,10 @@ export const WEBMCP_DISCOVERY_POLL_MS = 200;
 
 export const WEBMCP_MAX_RESULT_CHARS = 16_384;
 
-export function namespacedToolName(
-  providerId: ProviderId,
-  toolName: string,
-): string {
+export function namespacedToolName<
+  const TProvider extends string,
+  const TTool extends string,
+>(providerId: TProvider, toolName: TTool): `${TProvider}.${TTool}` {
   return `${providerId}.${toolName}`;
 }
 
@@ -120,12 +157,24 @@ export function schemaFingerprint(schema: Record<string, unknown>): string {
   return stableStringify(schema);
 }
 
-export function boundedError(code: string, message: string): BoundedError {
-  return boundedErrorSchema.parse({
+export function boundedError<TCode extends GatewayErrorCode>(
+  code: TCode,
+  message: string,
+): BoundedError<TCode> {
+  const parsed = boundedErrorSchema.parse({
     status: "error",
     code,
     message,
   });
+  return {
+    status: "error",
+    code: parsed.code as TCode,
+    message: parsed.message,
+  };
+}
+
+export function boundedSuccess<TData>(data: TData): BoundedSuccess<TData> {
+  return { status: "success", data };
 }
 
 export function parseJsonObject(raw: string): Record<string, unknown> {
@@ -157,8 +206,8 @@ export function normalizeInputSchema(raw: unknown): {
 
 export function serializeExecuteInput(
   invokeKind: InvokeKind,
-  input: Record<string, unknown>,
-): Record<string, unknown> | string {
+  input: object,
+): object | string {
   if (invokeKind === "json-string") {
     return JSON.stringify(input);
   }

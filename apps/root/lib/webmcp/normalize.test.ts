@@ -43,6 +43,22 @@ describe("normalizeDiscoveredTool", () => {
     expect(discovered.descriptor.invokeKind).toBe("json-string");
   });
 
+  it("namespaces a custom provider tool without granting workflow identity", () => {
+    const discovered = normalizeDiscoveredTool({
+      providerId: "custom-analytics-1",
+      instanceId: "custom-analytics-1_instance",
+      expectedOrigin: "https://analytics.example",
+      tool: tool({
+        name: "inspect",
+        origin: "https://analytics.example",
+      }),
+    });
+    expect(discovered.descriptor.namespacedName).toBe(
+      "custom-analytics-1.inspect",
+    );
+    expect(discovered.descriptor.providerId).toBe("custom-analytics-1");
+  });
+
   it("rejects an unexpected origin", () => {
     expect(() =>
       normalizeDiscoveredTool({

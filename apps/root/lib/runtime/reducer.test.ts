@@ -23,8 +23,8 @@ function catalogStep() {
   return {
     providerId: "shop" as const,
     origin: "http://localhost:3002",
-    toolName: "search_products",
-    namespacedName: "shop.search_products",
+    toolName: "search_products" as const,
+    namespacedName: "shop.search_products" as const,
     schemaFingerprint: "fp",
     arguments: { query: "keyboard" },
     readOnly: true as const,
@@ -60,6 +60,18 @@ describe("runtimeReducer", () => {
       tools: [],
     });
     expect(state.provider.lifecycle).toBe("active");
+  });
+
+  it("mounts a bounded dynamic provider identity", () => {
+    const state = runtimeReducer(createInitialRuntimeState(account), {
+      type: "provider/mount",
+      providerId: "custom-analytics-1",
+      instanceId: "custom-analytics-1_instance",
+      origin: "https://analytics.example",
+      entryUrl: "https://analytics.example/app",
+    });
+    expect(state.provider.providerId).toBe("custom-analytics-1");
+    expect(state.provider.entryUrl).toBe("https://analytics.example/app");
   });
 
   it("ignores events from a stale instance", () => {

@@ -2,15 +2,28 @@
 
 import {
   boundedError,
+  boundedSuccess,
   parseBoundedJsonResult,
   parseExecuteResultText,
   type Account,
+  type BoundedError,
   type BoundedResultEnvelope,
+  type CancelWorkflowInput,
+  type CancelWorkflowOutput,
   type DiscoverCapabilitiesInput,
+  type DiscoverCapabilitiesOutput,
+  type ExecuteWorkflowInput,
+  type ExecuteWorkflowOutput,
+  type InspectWorkflowInput,
   type InspectWorkflowOutput,
+  type ListProvidersOutput,
+  type PrepareWorkflowInput,
+  type PrepareWorkflowOutput,
+  type WorkflowStepResult,
 } from "@repo/contracts";
 import {
   useCallback,
+  useEffect,
   useMemo,
   useReducer,
   useRef,
@@ -22,12 +35,18 @@ import { applyFrame, layoutFromRect } from "@/lib/window/frame";
 import { createWindowSession } from "@/lib/window/session";
 import {
   DirectoryError,
-  getTrustedProvider,
-  pinForProvider,
+  getBuiltinProvider,
   type ProviderDirectory,
 } from "@/lib/providers/directory";
+import {
+  getProvider,
+  hasProvider,
+  providerKey,
+  type ProviderCatalog,
+} from "@/lib/providers/catalog";
+import { useProviderLibrary } from "@/lib/providers/provider-library";
 import { GatewayRegistrar } from "@/lib/runtime/gateway-registrar";
-import { getPassReadTool } from "@/lib/runtime/pass-tools";
+import { parsePassToolResult } from "@/lib/runtime/pass-tools";
 import { prepareWorkflow as bindWorkflow, revalidatePreparedStep } from "@/lib/runtime/prepare";
 import { runtimeReducer } from "@/lib/runtime/reducer";
 import {
@@ -62,6 +81,7 @@ export function RuntimeProvider({
   account: Account;
   directory: ProviderDirectory;
 }>) {
+  const { catalog } = useProviderLibrary();
   const [state, dispatch] = useReducer(
     runtimeReducer,
     account,
@@ -128,33 +148,47 @@ export function RuntimeProvider({
         windowSessionRef.current.unbind();
         handlesRef.current.invalidateInstance(current.provider.instanceId);
       }
-      const entry = getTrustedProvider(directory, providerId);
-      const instanceId = `${entry.providerId}_${crypto.randomUUID()}`;
+      const entry = getProvider(catalog, providerId);
+      const id = providerKey(entry);
+      const instanceId = `${id}_${crypto.randomUUID()}`;
       dispatch({
         type: "provider/mount",
-        providerId: entry.providerId,
+        providerId: id,
         instanceId,
         origin: entry.origin,
         entryUrl: entry.entryUrl,
       });
       return instanceId;
     },
-    [directory],
+    [catalog],
   );
 
   const closeProvider = useCallback(() => {
     motionAbortRef.current?.abort();
     windowSessionRef.current.unbind();
+    const instanceId = stateRef.current.provider.instanceId;
+    if (instanceId) {
+      handlesRef.current.invalidateInstance(instanceId);
+      dispatch({ type: "handles/invalidate", instanceId });
+    }
     dispatch({ type: "provider/unmount" });
   }, []);
+
+  useEffect(() => {
+    const providerId = state.provider.providerId;
+    if (providerId && !hasProvider(catalog, providerId)) {
+      closeProvider();
+    }
+  }, [catalog, closeProvider, state.provider.providerId]);
 
   const runDiscovery = useCallback(
     async (
       providerId: string,
       signal: AbortSignal,
-    ): Promise<BoundedResultEnvelope> => {
+    ): Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>> => {
       try {
-        const entry = getTrustedProvider(directory, providerId);
+        const entry = getProvider(catalog, providerId);
+        const id = providerKey(entry);
         const instanceId = openProvider(providerId);
         await waitForLoad(instanceId);
         signal.throwIfAborted();
@@ -178,13 +212,16 @@ export function RuntimeProvider({
         const rawTools = await discoverTools({
           modelContext,
           origin: entry.origin,
-          expectedNames: entry.expectedTools,
+          discovery:
+            entry.source === "builtin"
+              ? { mode: "builtin", expectedNames: entry.expectedTools }
+              : { mode: "custom" },
           signal,
         });
         const normalized = rejectDuplicateToolNames(
           rawTools.map((tool) =>
             normalizeDiscoveredTool({
-              providerId: entry.providerId,
+              providerId: id,
               instanceId,
               expectedOrigin: entry.origin,
               tool,
@@ -205,15 +242,14 @@ export function RuntimeProvider({
           instanceId,
           tools: normalized.map((tool) => tool.descriptor),
         });
-        return {
-          status: "success",
-          data: {
-            providerId: entry.providerId,
-            origin: entry.origin,
-            contractVersion: entry.contractVersion,
-            tools: normalized.map((tool) => tool.descriptor),
-          },
+        const output: DiscoverCapabilitiesOutput = {
+          providerId: id,
+          origin: entry.origin,
+          contractVersion:
+            entry.source === "builtin" ? entry.contractVersion : null,
+          tools: normalized.map((tool) => tool.descriptor),
         };
+        return boundedSuccess(output);
       } catch (error) {
         if (error instanceof DirectoryError) {
           dispatch({ type: "provider/failed", reason: error.code });
@@ -231,14 +267,29 @@ export function RuntimeProvider({
         return boundedError(code, "Capability discovery failed.");
       }
     },
-    [directory, openProvider, waitForLoad],
+    [catalog, openProvider, waitForLoad],
+  );
+
+  const listProviders = useCallback(
+    (): BoundedResultEnvelope<ListProvidersOutput> => {
+      const output: ListProvidersOutput = {
+        providers: catalog.providers.map((provider) => ({
+          providerId: providerKey(provider),
+          label: provider.label,
+          source: provider.source,
+          capability: provider.capability,
+        })),
+      };
+      return boundedSuccess(output);
+    },
+    [catalog.providers],
   );
 
   const discoverCapabilities = useCallback(
     async (
       input: DiscoverCapabilitiesInput,
       signal: AbortSignal,
-    ): Promise<BoundedResultEnvelope> => {
+    ): Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>> => {
       dispatch({ type: "control/set", control: "agent" });
       try {
         return await runDiscovery(input.providerId, signal);
@@ -249,16 +300,23 @@ export function RuntimeProvider({
     [runDiscovery],
   );
 
-  const prepareWorkflow = useCallback((input: unknown): BoundedResultEnvelope => {
-    const parsed = (input as { steps?: unknown[] }) ?? {};
+  const testProvider = useCallback(
+    (providerId: string) =>
+      runDiscovery(providerId, new AbortController().signal),
+    [runDiscovery],
+  );
+
+  const prepareWorkflow = useCallback((
+    input: PrepareWorkflowInput,
+  ): BoundedResultEnvelope<PrepareWorkflowOutput> => {
     const workflowId = `wf_${crypto.randomUUID()}`;
     const prepared = bindWorkflow({
       state: stateRef.current,
-      steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+      steps: input.steps,
       workflowId,
       origins: {
-        shop: directory.providers.shop.origin,
-        accounts: directory.providers.accounts.origin,
+        shop: getBuiltinProvider(directory, "shop").origin,
+        accounts: getBuiltinProvider(directory, "accounts").origin,
       },
     });
     if (!prepared.ok) {
@@ -269,20 +327,18 @@ export function RuntimeProvider({
       workflowId: prepared.workflowId,
       steps: prepared.steps,
     });
-    return {
-      status: "success",
-      data: {
-        workflowId: prepared.workflowId,
-        steps: prepared.steps,
-      },
+    const output: PrepareWorkflowOutput = {
+      workflowId: prepared.workflowId,
+      steps: prepared.steps,
     };
+    return boundedSuccess(output);
   }, [directory]);
 
   const executeWorkflow = useCallback(
     async (
-      input: { workflowId: string },
+      input: ExecuteWorkflowInput,
       signal: AbortSignal,
-    ): Promise<BoundedResultEnvelope> => {
+    ): Promise<BoundedResultEnvelope<ExecuteWorkflowOutput>> => {
       const current = stateRef.current;
       if (
         current.workflow.id !== input.workflowId ||
@@ -302,7 +358,7 @@ export function RuntimeProvider({
       executionAbortRef.current = combined;
 
       dispatch({ type: "workflow/executing", workflowId: input.workflowId });
-      const results: unknown[] = [];
+      const results: WorkflowStepResult[] = [];
       const evidenceParts: string[] = [];
       try {
         for (let index = 0; index < steps.length; index += 1) {
@@ -343,7 +399,6 @@ export function RuntimeProvider({
             );
           }
 
-          const spec = getPassReadTool(step.namespacedName);
           const handle = handlesRef.current.get(
             live.provider.instanceId,
             step.origin,
@@ -354,7 +409,7 @@ export function RuntimeProvider({
               tool.providerId === step.providerId &&
               tool.name === step.toolName,
           );
-          if (!spec || !handle || !descriptor) {
+          if (!handle || !descriptor) {
             dispatch({ type: "workflow/invalidate" });
             return boundedError(
               "revalidation_failed",
@@ -384,13 +439,14 @@ export function RuntimeProvider({
             input: step.arguments,
             signal: combined.signal,
           });
-          const parsed = spec.parseOutput(
+          const parsed = parsePassToolResult(
+            step.namespacedName,
             parseBoundedJsonResult(parseExecuteResultText(resultText)),
           );
           if (!parsed) {
             throw new Error("execution_failed");
           }
-          results.push(parsed.data);
+          results.push(parsed.result);
           evidenceParts.push(parsed.evidence);
         }
 
@@ -398,14 +454,10 @@ export function RuntimeProvider({
         dispatch({
           type: "workflow/passed",
           workflowId: input.workflowId,
-          result: results.length === 1 ? results[0] : { results },
           results,
           evidence,
         });
-        return {
-          status: "success",
-          data: results.length === 1 ? results[0] : { results },
-        };
+        return boundedSuccess({ results });
       } catch (error) {
         const cancelled =
           combined.signal.aborted ||
@@ -432,7 +484,7 @@ export function RuntimeProvider({
   );
 
   const cancelWorkflow = useCallback(
-    (input: { workflowId: string }): BoundedResultEnvelope => {
+    (input: CancelWorkflowInput): BoundedResultEnvelope<CancelWorkflowOutput> => {
       const current = stateRef.current;
       if (current.workflow.id !== input.workflowId) {
         return boundedError(
@@ -446,15 +498,15 @@ export function RuntimeProvider({
       if (current.workflow.lifecycle === "prepared") {
         dispatch({ type: "workflow/cancelled", workflowId: input.workflowId });
       }
-      return { status: "success", data: { workflowId: input.workflowId } };
+      return boundedSuccess({ workflowId: input.workflowId });
     },
     [],
   );
 
   const inspectWorkflow = useCallback(
     (
-      input: { workflowId: string },
-    ): InspectWorkflowOutput | BoundedResultEnvelope => {
+      input: InspectWorkflowInput,
+    ): InspectWorkflowOutput | BoundedError => {
       const current = stateRef.current;
       if (current.workflow.id !== input.workflowId) {
         return boundedError(
@@ -462,24 +514,16 @@ export function RuntimeProvider({
           "That workflow is not current.",
         );
       }
-      const last =
-        current.workflow.results[current.workflow.results.length - 1];
-      const result =
-        last === undefined
-          ? null
-          : {
-              status: "success" as const,
-              data: last,
-            };
-      return {
+      const output: InspectWorkflowOutput = {
         workflowId: input.workflowId,
         lifecycle: current.workflow.lifecycle,
         steps: current.workflow.steps,
         step: current.workflow.step,
         results: current.workflow.results,
-        result,
+        evidence: current.workflow.evidence,
         failureReason: current.workflow.failureReason,
       };
+      return output;
     },
     [],
   );
@@ -639,6 +683,7 @@ export function RuntimeProvider({
       openProvider,
       closeProvider,
       activateProvider,
+      testProvider,
       windowSession: windowSessionRef.current,
     }),
     [
@@ -647,6 +692,7 @@ export function RuntimeProvider({
       openProvider,
       closeProvider,
       activateProvider,
+      testProvider,
       requestPlacement,
       state,
     ],
@@ -658,12 +704,13 @@ export function RuntimeProvider({
         {children}
         <ProviderIframe
           state={state}
-          directory={directory}
+          catalog={catalog}
           iframeRef={iframeRef}
           onLoad={onIframeLoad}
         />
       </div>
       <GatewayRegistrar
+        listProviders={listProviders}
         discoverCapabilities={discoverCapabilities}
         prepareWorkflow={prepareWorkflow}
         executeWorkflow={executeWorkflow}
@@ -679,12 +726,12 @@ export function RuntimeProvider({
 
 function ProviderIframe({
   state,
-  directory,
+  catalog,
   iframeRef,
   onLoad,
 }: {
   state: RuntimeState;
-  directory: ProviderDirectory;
+  catalog: ProviderCatalog;
   iframeRef: RefObject<HTMLIFrameElement | null>;
   onLoad: () => void;
 }) {
@@ -696,15 +743,19 @@ function ProviderIframe({
     return null;
   }
 
-  const pin = pinForProvider(directory, state.provider.providerId);
+  const provider = getProvider(catalog, state.provider.providerId);
 
   return (
-    <AppWindow.Root key={state.provider.instanceId} title={pin.label} icon={pin.icon}>
+    <AppWindow.Root
+      key={state.provider.instanceId}
+      title={provider.label}
+      icon={provider.icon}
+    >
       <iframe
         ref={iframeRef}
         src={state.provider.entryUrl}
         allow="tools"
-        title={pin.label}
+        title={provider.label}
         className="size-full border-0"
         onLoad={onLoad}
       />

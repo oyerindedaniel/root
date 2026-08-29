@@ -4,14 +4,15 @@ import {
   SHOP_CONTRACT_VERSION,
   SHOP_EXPECTED_TOOLS,
   readOrigin,
-  type ProviderId,
+  type BuiltinWorkflowProviderId,
+  type GatewayErrorCode,
   type TrustedProviderEntry,
 } from "@repo/contracts";
 
 export class DirectoryError extends Error {
-  readonly code: string;
+  readonly code: GatewayErrorCode;
 
-  constructor(code: string, message: string) {
+  constructor(code: GatewayErrorCode, message: string) {
     super(message);
     this.name = "DirectoryError";
     this.code = code;
@@ -26,39 +27,17 @@ export type ProviderDirectoryEnv = {
   NEXT_PUBLIC_ACCOUNTS_ENTRY_URL?: string;
 };
 
-export type WorkspacePin = {
-  id: string;
+export type BuiltinProviderDefinition = TrustedProviderEntry & {
   label: string;
   icon: string;
-  providerId: ProviderId | null;
+  source: "builtin";
+  capability: "workflow-ready";
 };
 
 export type ProviderDirectory = {
   rootOrigin: string;
-  providers: Record<ProviderId, TrustedProviderEntry>;
-  pins: readonly WorkspacePin[];
+  builtins: readonly BuiltinProviderDefinition[];
 };
-
-export const WORKSPACE_PINS: readonly WorkspacePin[] = [
-  {
-    id: "customers",
-    label: "Customers",
-    icon: "/icons/customers-icon.webp",
-    providerId: "accounts",
-  },
-  {
-    id: "shop",
-    label: "Catalog",
-    icon: "/icons/catalog-icon.webp",
-    providerId: "shop",
-  },
-  {
-    id: "cases",
-    label: "Cases",
-    icon: "/icons/cases-icon.webp",
-    providerId: null,
-  },
-];
 
 function requiredEnv(
   env: ProviderDirectoryEnv,
@@ -94,14 +73,20 @@ function loadTrustedEntry(
   env: ProviderDirectoryEnv,
   originKey: keyof ProviderDirectoryEnv,
   entryKey: keyof ProviderDirectoryEnv,
-  providerId: ProviderId,
+  providerId: BuiltinWorkflowProviderId,
+  label: string,
+  icon: string,
   contractVersion: string,
   expectedTools: readonly string[],
-): TrustedProviderEntry {
+): BuiltinProviderDefinition {
   const origin = readOrigin(requiredEnv(env, originKey));
   const entryUrl = readEntryUrl(requiredEnv(env, entryKey), origin);
   return {
     providerId,
+    label,
+    icon,
+    source: "builtin",
+    capability: "workflow-ready",
     origin,
     entryUrl,
     contractVersion,
@@ -115,55 +100,43 @@ export function loadProviderDirectory(
   const rootOrigin = readOrigin(requiredEnv(env, "NEXT_PUBLIC_ROOT_ORIGIN"));
   return {
     rootOrigin,
-    providers: {
-      shop: loadTrustedEntry(
+    builtins: [
+      loadTrustedEntry(
         env,
         "NEXT_PUBLIC_SHOP_ORIGIN",
         "NEXT_PUBLIC_SHOP_ENTRY_URL",
         "shop",
+        "Catalog",
+        "/icons/catalog-icon.webp",
         SHOP_CONTRACT_VERSION,
         SHOP_EXPECTED_TOOLS,
       ),
-      accounts: loadTrustedEntry(
+      loadTrustedEntry(
         env,
         "NEXT_PUBLIC_ACCOUNTS_ORIGIN",
         "NEXT_PUBLIC_ACCOUNTS_ENTRY_URL",
         "accounts",
+        "Customers",
+        "/icons/customers-icon.webp",
         ACCOUNTS_CONTRACT_VERSION,
         ACCOUNTS_EXPECTED_TOOLS,
       ),
-    },
-    pins: WORKSPACE_PINS,
+    ],
   };
 }
 
-export function pinForProvider(
-  directory: ProviderDirectory,
-  providerId: ProviderId,
-): WorkspacePin {
-  const pin = directory.pins.find((entry) => entry.providerId === providerId);
-  if (!pin) {
-    throw new DirectoryError(
-      "unknown_provider",
-      "Provider is not in the trusted directory.",
-    );
-  }
-  return pin;
-}
-
-export function getTrustedProvider(
+export function getBuiltinProvider(
   directory: ProviderDirectory,
   providerId: string,
-): TrustedProviderEntry {
-  if (!isProviderId(providerId)) {
+): BuiltinProviderDefinition {
+  const provider = directory.builtins.find(
+    (entry) => entry.providerId === providerId,
+  );
+  if (!provider) {
     throw new DirectoryError(
       "unknown_provider",
-      "Provider is not in the trusted directory.",
+      "Provider is not in the built-in directory.",
     );
   }
-  return directory.providers[providerId];
-}
-
-export function isProviderId(value: string): value is ProviderId {
-  return value === "shop" || value === "accounts";
+  return provider;
 }

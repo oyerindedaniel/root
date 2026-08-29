@@ -25,7 +25,10 @@ describe("discoverTools", () => {
     const found = await discoverTools({
       modelContext: context([search]),
       origin: "http://localhost:3002",
-      expectedNames: ["search_products"],
+      discovery: {
+        mode: "builtin",
+        expectedNames: ["search_products"],
+      },
       signal: new AbortController().signal,
       timeoutMs: 50,
       pollMs: 5,
@@ -39,7 +42,10 @@ describe("discoverTools", () => {
       discoverTools({
         modelContext: context([]),
         origin: "http://localhost:3002",
-        expectedNames: ["search_products"],
+        discovery: {
+          mode: "builtin",
+          expectedNames: ["search_products"],
+        },
         signal: new AbortController().signal,
         timeoutMs: 20,
         pollMs: 10,
@@ -49,5 +55,31 @@ describe("discoverTools", () => {
         },
       }),
     ).rejects.toBeInstanceOf(DiscoveryTimeoutError);
+  });
+
+  it("returns every custom tool from the exact configured origin", async () => {
+    const first = {
+      name: "inspect",
+      origin: "https://analytics.example",
+      inputSchema: {},
+    };
+    const second = {
+      name: "export",
+      origin: "https://analytics.example",
+      inputSchema: {},
+    };
+    const found = await discoverTools({
+      modelContext: context([
+        first,
+        second,
+        { ...second, name: "wrong", origin: "https://other.example" },
+      ]),
+      origin: "https://analytics.example",
+      discovery: { mode: "custom" },
+      signal: new AbortController().signal,
+      timeoutMs: 50,
+      pollMs: 5,
+    });
+    expect(found).toEqual([first, second]);
   });
 });
