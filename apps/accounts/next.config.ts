@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
-import { apiUpstreamUrl } from "@repo/api-client/env";
+import { apiUpstreamUrl, requirePublicEnv } from "@repo/api-client/env";
+
+const rootOrigin = requirePublicEnv(
+  "NEXT_PUBLIC_ROOT_ORIGIN",
+  process.env.NEXT_PUBLIC_ROOT_ORIGIN,
+);
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@repo/ui", "@repo/api-client"],
@@ -9,6 +14,19 @@ const nextConfig: NextConfig = {
       {
         source: "/api/:path*",
         destination: `${apiUpstreamUrl}/api/:path*`,
+      },
+    ];
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: `frame-ancestors ${rootOrigin}`,
+          },
+        ],
       },
     ];
   },

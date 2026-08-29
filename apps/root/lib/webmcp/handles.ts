@@ -1,6 +1,4 @@
-import { toolHandleKey } from "@repo/contracts";
-
-import type { RegisteredTool } from "./model-context";
+import { toolHandleKey, type RegisteredTool } from "@repo/contracts";
 
 export class ToolHandleRegistry {
   private handles = new Map<string, RegisteredTool>();

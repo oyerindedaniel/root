@@ -6,9 +6,8 @@ import {
   toolHandleKey,
   type NormalizedToolDescriptor,
   type ProviderId,
+  type RegisteredTool,
 } from "@repo/contracts";
-
-import type { RegisteredTool } from "./model-context";
 
 export type DiscoveredTool = {
   descriptor: NormalizedToolDescriptor;

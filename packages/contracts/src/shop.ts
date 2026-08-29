@@ -28,7 +28,7 @@ export const SEARCH_PRODUCTS_INPUT_SCHEMA = {
   properties: {
     query: {
       type: "string",
-      description: "Product text to match against the test catalog.",
+      description: "Product text to match against the catalog.",
     },
   },
   required: ["query"],

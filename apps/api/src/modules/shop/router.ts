@@ -3,7 +3,7 @@ import {
   searchProductsOutputSchema,
 } from "@repo/contracts";
 
-import { searchTestCatalog } from "@api/modules/shop/catalog.js";
+import { searchCatalog } from "@api/modules/shop/catalog.js";
 import { createTrpcRouter, publicProcedure } from "@api/trpc/trpc.js";
 
 export const shopRouter = createTrpcRouter({
@@ -17,6 +17,6 @@ export const shopRouter = createTrpcRouter({
     .query(({ input }) => ({
       status: "success" as const,
       query: input.query,
-      products: searchTestCatalog(input.query),
+      products: searchCatalog(input.query),
     })),
 });

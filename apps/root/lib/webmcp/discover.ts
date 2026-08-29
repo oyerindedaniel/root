@@ -1,9 +1,9 @@
 import {
   WEBMCP_DISCOVERY_POLL_MS,
   WEBMCP_DISCOVERY_TIMEOUT_MS,
+  type ModelContext,
+  type RegisteredTool,
 } from "@repo/contracts";
-
-import type { ModelContext, RegisteredTool } from "./model-context";
 
 export class DiscoveryTimeoutError extends Error {
   constructor() {

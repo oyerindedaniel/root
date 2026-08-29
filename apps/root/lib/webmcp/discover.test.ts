@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import type { ModelContext, RegisteredTool } from "@repo/contracts";
+
 import { DiscoveryTimeoutError, discoverTools } from "./discover";
-import type { ModelContext, RegisteredTool } from "./model-context";
 
 function context(tools: RegisteredTool[]): ModelContext {
   const target = new EventTarget();

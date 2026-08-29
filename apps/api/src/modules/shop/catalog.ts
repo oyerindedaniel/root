@@ -1,10 +1,10 @@
 import type { ShopProduct } from "@repo/contracts";
 
-export const TEST_CATALOG: ShopProduct[] = [
+export const CATALOG: ShopProduct[] = [
   {
     id: "kbd-wireless",
     name: "Wireless Keyboard",
-    description: "Compact wireless keyboard for test orders.",
+    description: "Compact wireless keyboard for desk kits.",
     priceUsd: 42,
   },
   {
@@ -33,10 +33,10 @@ export const TEST_CATALOG: ShopProduct[] = [
   },
 ];
 
-export function searchTestCatalog(query: string): ShopProduct[] {
+export function searchCatalog(query: string): ShopProduct[] {
   const needle = query.trim().toLowerCase();
   const matches: ShopProduct[] = [];
-  for (const product of TEST_CATALOG) {
+  for (const product of CATALOG) {
     if (
       product.name.toLowerCase().includes(needle) ||
       product.description.toLowerCase().includes(needle)

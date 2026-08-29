@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { ModelContext, RegisteredTool } from "@repo/contracts";
+
 import { executeRegisteredTool } from "./execute";
-import type { ModelContext, RegisteredTool } from "./model-context";
 
 const tool: RegisteredTool = {
   name: "search_products",

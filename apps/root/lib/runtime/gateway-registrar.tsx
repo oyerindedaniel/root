@@ -15,7 +15,6 @@ import {
 import { useEffect, useRef } from "react";
 
 import { useIsomorphicLayoutEffect } from "@/lib/use-isomorphic-layout-effect";
-import { getDocumentModelContext } from "@/lib/webmcp/model-context";
 
 export type GatewayHandlers = {
   discoverCapabilities: (
@@ -41,7 +40,7 @@ export function GatewayRegistrar(handlers: GatewayHandlers) {
   });
 
   useEffect(() => {
-    const modelContext = getDocumentModelContext(document);
+    const modelContext = document.modelContext;
     if (!modelContext) {
       return;
     }
@@ -57,7 +56,7 @@ async function registerGatewayTools(
   signal: AbortSignal,
   handlersRef: { current: GatewayHandlers },
 ) {
-  const context = getDocumentModelContext(document);
+  const context = document.modelContext;
   if (!context) {
     return;
   }
@@ -67,13 +66,13 @@ async function registerGatewayTools(
       name: "discover_capabilities",
       title: "Discover capabilities",
       description:
-        "Mount the trusted Catalog provider and discover its current WebMCP tools.",
+        "Mount a trusted provider and discover its current WebMCP tools.",
       inputSchema: {
         type: "object",
         properties: {
           providerId: {
             type: "string",
-            description: "Trusted provider id. Only shop is allowed in this pass.",
+            description: "Trusted provider id. shop or accounts.",
           },
         },
         required: ["providerId"],
@@ -86,7 +85,7 @@ async function registerGatewayTools(
         if (!parsed.success) {
           return boundedError(
             "invalid_arguments",
-            "discover_capabilities requires providerId shop.",
+            "discover_capabilities requires providerId shop or accounts.",
           );
         }
         return handlersRef.current.discoverCapabilities(

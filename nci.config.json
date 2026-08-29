@@ -1,0 +1,10 @@
+{
+  "database": "C:\\Users\\doyer\\AppData\\Local\\nci\\nci.sqlite",
+  "project_root": ".",
+  "workspaces": ["apps/*", "packages/*", "tooling/*"],
+  "package_scope": ["dependencies", "dev_dependencies"],
+  "format": "plain",
+  "progress": "auto",
+  "max_hops": 10,
+  "package_parallel": true
+}

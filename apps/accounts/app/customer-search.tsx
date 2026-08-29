@@ -4,11 +4,11 @@ import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useTRPCClient } from "@repo/api-client";
 import { requirePublicEnv } from "@repo/api-client/env";
 import {
-  SEARCH_PRODUCTS_INPUT_SCHEMA,
+  SEARCH_CUSTOMERS_INPUT_SCHEMA,
   parseToolExecuteInput,
-  searchProductsInputSchema,
-  searchProductsOutputSchema,
-  type ShopProduct,
+  searchCustomersInputSchema,
+  searchCustomersOutputSchema,
+  type Customer,
 } from "@repo/contracts";
 import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
@@ -23,25 +23,27 @@ const rootOrigin = requirePublicEnv(
   process.env.NEXT_PUBLIC_ROOT_ORIGIN,
 );
 
-export function CatalogSearch() {
+export function CustomerSearch() {
   const trpcClient = useTRPCClient();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<SearchStatus>("idle");
-  const [products, setProducts] = useState<ShopProduct[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const runSearch = useCallback(
     async (nextQuery: string, signal?: AbortSignal) => {
-      const parsed = searchProductsInputSchema.parse({ query: nextQuery });
+      const parsed = searchCustomersInputSchema.parse({ query: nextQuery });
       setQuery(parsed.query);
       setStatus("pending");
       setError(null);
       try {
-        const result = searchProductsOutputSchema.parse(
-          await trpcClient.v1.shop.searchProducts.query(parsed, { signal }),
+        const result = searchCustomersOutputSchema.parse(
+          await trpcClient.v1.accounts.searchCustomers.query(parsed, {
+            signal,
+          }),
         );
         signal?.throwIfAborted();
-        setProducts(result.products);
+        setCustomers(result.customers);
         setStatus("success");
         return result;
       } catch (caught) {
@@ -52,7 +54,7 @@ export function CatalogSearch() {
           throw caught;
         }
         setStatus("error");
-        setError("Catalog search failed.");
+        setError("Customer search failed.");
         throw caught;
       }
     },
@@ -67,17 +69,17 @@ export function CatalogSearch() {
     const controller = new AbortController();
     void modelContext.registerTool(
       {
-        name: "search_products",
-        title: "Search products",
+        name: "search_customers",
+        title: "Search customers",
         description:
-          "Searches the catalog and visibly displays matching products.",
-        inputSchema: SEARCH_PRODUCTS_INPUT_SCHEMA,
+          "Searches the directory and visibly displays matching customers.",
+        inputSchema: SEARCH_CUSTOMERS_INPUT_SCHEMA,
         annotations: {
           readOnlyHint: true,
           untrustedContentHint: false,
         },
         execute: async (input, options) => {
-          const parsed = searchProductsInputSchema.parse(
+          const parsed = searchCustomersInputSchema.parse(
             parseToolExecuteInput(input),
           );
           return runSearch(parsed.query, options.signal);
@@ -94,9 +96,9 @@ export function CatalogSearch() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
       <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-medium">Catalog</h1>
+        <h1 className="text-3xl font-medium">Customers</h1>
         <p className="text-base text-muted-foreground">
-          Search the catalog. This page works without WebMCP.
+          Search customers. This page works without WebMCP.
         </p>
       </header>
       <form
@@ -136,20 +138,19 @@ export function CatalogSearch() {
         </Badge>
       </div>
       {error ? <p className="text-base text-destructive">{error}</p> : null}
-      {status === "success" && products.length === 0 ? (
-        <p className="text-base text-muted-foreground">No matching products.</p>
+      {status === "success" && customers.length === 0 ? (
+        <p className="text-base text-muted-foreground">No matching customers.</p>
       ) : null}
       <ul className="flex flex-col gap-3">
-        {products.map((product) => (
+        {customers.map((customer) => (
           <li
-            key={product.id}
+            key={customer.id}
             className="rounded-lg border border-border p-4"
           >
-            <p className="text-base font-medium">{product.name}</p>
-            <p className="mt-1 text-base text-muted-foreground">
-              {product.description}
+            <p className="text-base font-medium">{customer.name}</p>
+            <p className="mt-1 font-mono text-base text-muted-foreground">
+              {customer.email}
             </p>
-            <p className="mt-2 font-mono text-base">${product.priceUsd}</p>
           </li>
         ))}
       </ul>

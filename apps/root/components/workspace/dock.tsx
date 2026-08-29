@@ -75,6 +75,7 @@ export function DockRoot({ children }: PropsWithChildren) {
   const hovering = useMotionValue(0);
   const rowLeft = useMotionValue(0);
   const rowWidth = useMotionValue(0);
+  const holdRest = useRef(false);
   const onWindowPointerRef = useRef<(event: PointerEvent) => void>(() => undefined);
 
   function pointerOnDock(clientX: number, clientY: number) {
@@ -100,7 +101,15 @@ export function DockRoot({ children }: PropsWithChildren) {
   }
 
   onWindowPointerRef.current = (event: PointerEvent) => {
-    if (pointerOnDock(event.clientX, event.clientY)) {
+    const onDock = pointerOnDock(event.clientX, event.clientY);
+    if (holdRest.current) {
+      holdRest.current = false;
+      if (!onDock) {
+        rest();
+        return;
+      }
+    }
+    if (onDock) {
       if (!dockPointerAllowed(event.pointerType)) {
         return;
       }
@@ -133,7 +142,7 @@ export function DockRoot({ children }: PropsWithChildren) {
   }, []);
 
   function track(event: ReactPointerEvent<HTMLElement>) {
-    if (!dockPointerAllowed(event.pointerType)) {
+    if (holdRest.current || !dockPointerAllowed(event.pointerType)) {
       return;
     }
     const row = rowRef.current;
@@ -156,10 +165,16 @@ export function DockRoot({ children }: PropsWithChildren) {
         aria-label="Providers"
         data-caliper-id="root-dock"
         onPointerEnter={track}
+        onClick={() => {
+          holdRest.current = true;
+          hovering.set(0);
+          watchWindow();
+        }}
         onPointerLeave={(event) => {
           if (pointerOnDock(event.clientX, event.clientY)) {
             return;
           }
+          holdRest.current = false;
           rest();
         }}
       >

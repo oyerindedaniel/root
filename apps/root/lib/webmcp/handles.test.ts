@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import type { RegisteredTool } from "@repo/contracts";
+
 import { ToolHandleRegistry } from "./handles";
-import type { RegisteredTool } from "./model-context";
 
 const tool = {
   name: "search_products",

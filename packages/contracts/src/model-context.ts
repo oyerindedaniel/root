@@ -38,13 +38,8 @@ export type ModelContext = EventTarget & {
   ) => Promise<unknown>;
 };
 
-export function getDocumentModelContext(
-  doc: Document,
-): ModelContext | null {
-  if (!("modelContext" in doc)) {
-    return null;
+declare global {
+  interface Document {
+    readonly modelContext?: ModelContext;
   }
-  const modelContext = (doc as Document & { modelContext?: ModelContext })
-    .modelContext;
-  return modelContext ?? null;
 }

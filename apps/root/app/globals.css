@@ -10,17 +10,6 @@
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --animate-workflow: workflow-shift 1.2s ease-in-out infinite;
-}
-
-@keyframes workflow-shift {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
 }
 
 @utility desktop-canvas {

@@ -1,11 +1,18 @@
-const apiUpstreamRaw = process.env.NEXT_PUBLIC_API_URL?.trim();
-if (!apiUpstreamRaw) {
-  throw new Error(
-    "Set NEXT_PUBLIC_API_URL in the app .env.local (see .env.example).",
-  );
+export function requirePublicEnv(
+  name: string,
+  value: string | undefined,
+): string {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    throw new Error(`Set ${name} in the app .env.local (see .env.example).`);
+  }
+  return trimmed;
 }
 
-export const apiUpstreamUrl = apiUpstreamRaw.replace(/\/$/, "");
+export const apiUpstreamUrl = requirePublicEnv(
+  "NEXT_PUBLIC_API_URL",
+  process.env.NEXT_PUBLIC_API_URL,
+).replace(/\/$/, "");
 
 export const apiBaseUrl = apiUpstreamUrl;
 

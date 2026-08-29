@@ -8,7 +8,7 @@ import {
   type Dispatch,
   type RefObject,
 } from "react";
-import type { Account, TrustedProviderEntry } from "@repo/contracts";
+import type { Account } from "@repo/contracts";
 
 import type { ProviderDirectory } from "@/lib/providers/directory";
 import type { RuntimeAction, RuntimeState } from "@/lib/runtime/state";
@@ -19,7 +19,6 @@ export type RuntimeApi = {
   dispatch: Dispatch<RuntimeAction>;
   directory: ProviderDirectory;
   account: Account;
-  shop: TrustedProviderEntry;
   workspaceRef: RefObject<HTMLDivElement | null>;
   stageSlotRef: RefObject<HTMLDivElement | null>;
   traySlotRef: RefObject<HTMLDivElement | null>;

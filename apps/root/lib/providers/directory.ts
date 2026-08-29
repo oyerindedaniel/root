@@ -1,4 +1,6 @@
 import {
+  ACCOUNTS_CONTRACT_VERSION,
+  ACCOUNTS_EXPECTED_TOOLS,
   SHOP_CONTRACT_VERSION,
   SHOP_EXPECTED_TOOLS,
   readOrigin,
@@ -20,6 +22,8 @@ export type ProviderDirectoryEnv = {
   NEXT_PUBLIC_ROOT_ORIGIN?: string;
   NEXT_PUBLIC_SHOP_ORIGIN?: string;
   NEXT_PUBLIC_SHOP_ENTRY_URL?: string;
+  NEXT_PUBLIC_ACCOUNTS_ORIGIN?: string;
+  NEXT_PUBLIC_ACCOUNTS_ENTRY_URL?: string;
 };
 
 export type WorkspacePin = {
@@ -31,7 +35,7 @@ export type WorkspacePin = {
 
 export type ProviderDirectory = {
   rootOrigin: string;
-  shop: TrustedProviderEntry;
+  providers: Record<ProviderId, TrustedProviderEntry>;
   pins: readonly WorkspacePin[];
 };
 
@@ -40,7 +44,7 @@ export const WORKSPACE_PINS: readonly WorkspacePin[] = [
     id: "customers",
     label: "Customers",
     icon: "/icons/customers-icon.webp",
-    providerId: null,
+    providerId: "accounts",
   },
   {
     id: "shop",
@@ -75,35 +79,59 @@ function readEntryUrl(value: string, origin: string): string {
   try {
     url = new URL(value);
   } catch {
-    throw new DirectoryError("invalid_entry_url", "Shop entry URL is invalid.");
+    throw new DirectoryError("invalid_entry_url", "Entry URL is invalid.");
   }
   if (url.origin !== origin) {
     throw new DirectoryError(
       "entry_origin_mismatch",
-      "Shop entry URL must match the Shop origin.",
+      "Entry URL must match the provider origin.",
     );
   }
   return url.href;
+}
+
+function loadTrustedEntry(
+  env: ProviderDirectoryEnv,
+  originKey: keyof ProviderDirectoryEnv,
+  entryKey: keyof ProviderDirectoryEnv,
+  providerId: ProviderId,
+  contractVersion: string,
+  expectedTools: readonly string[],
+): TrustedProviderEntry {
+  const origin = readOrigin(requiredEnv(env, originKey));
+  const entryUrl = readEntryUrl(requiredEnv(env, entryKey), origin);
+  return {
+    providerId,
+    origin,
+    entryUrl,
+    contractVersion,
+    expectedTools: [...expectedTools],
+  };
 }
 
 export function loadProviderDirectory(
   env: ProviderDirectoryEnv,
 ): ProviderDirectory {
   const rootOrigin = readOrigin(requiredEnv(env, "NEXT_PUBLIC_ROOT_ORIGIN"));
-  const shopOrigin = readOrigin(requiredEnv(env, "NEXT_PUBLIC_SHOP_ORIGIN"));
-  const shopEntryUrl = readEntryUrl(
-    requiredEnv(env, "NEXT_PUBLIC_SHOP_ENTRY_URL"),
-    shopOrigin,
-  );
-
   return {
     rootOrigin,
-    shop: {
-      providerId: "shop",
-      origin: shopOrigin,
-      entryUrl: shopEntryUrl,
-      contractVersion: SHOP_CONTRACT_VERSION,
-      expectedTools: [...SHOP_EXPECTED_TOOLS],
+    providers: {
+      shop: loadTrustedEntry(
+        env,
+        "NEXT_PUBLIC_SHOP_ORIGIN",
+        "NEXT_PUBLIC_SHOP_ENTRY_URL",
+        "shop",
+        SHOP_CONTRACT_VERSION,
+        SHOP_EXPECTED_TOOLS,
+      ),
+      accounts: loadTrustedEntry(
+        env,
+        "NEXT_PUBLIC_ACCOUNTS_ORIGIN",
+        "NEXT_PUBLIC_ACCOUNTS_ENTRY_URL",
+        "accounts",
+        ACCOUNTS_CONTRACT_VERSION,
+        ACCOUNTS_EXPECTED_TOOLS,
+      ),
     },
     pins: WORKSPACE_PINS,
   };
@@ -127,15 +155,15 @@ export function getTrustedProvider(
   directory: ProviderDirectory,
   providerId: string,
 ): TrustedProviderEntry {
-  if (providerId !== "shop") {
+  if (!isProviderId(providerId)) {
     throw new DirectoryError(
       "unknown_provider",
       "Provider is not in the trusted directory.",
     );
   }
-  return directory.shop;
+  return directory.providers[providerId];
 }
 
 export function isProviderId(value: string): value is ProviderId {
-  return value === "shop";
+  return value === "shop" || value === "accounts";
 }

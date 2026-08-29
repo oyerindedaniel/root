@@ -62,6 +62,9 @@ describe("fingerprints and namespacing", () => {
     expect(namespacedToolName("shop", "search_products")).toBe(
       "shop.search_products",
     );
+    expect(namespacedToolName("accounts", "search_customers")).toBe(
+      "accounts.search_customers",
+    );
   });
 
   it("keys handles by instance origin and name", () => {

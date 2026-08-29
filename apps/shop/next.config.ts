@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
 
-import { apiUpstreamUrl } from "@repo/api-client/env";
+import { apiUpstreamUrl, requirePublicEnv } from "@repo/api-client/env";
 
-const rootOrigin =
-  process.env.NEXT_PUBLIC_ROOT_ORIGIN ?? "http://localhost:3000";
+const rootOrigin = requirePublicEnv(
+  "NEXT_PUBLIC_ROOT_ORIGIN",
+  process.env.NEXT_PUBLIC_ROOT_ORIGIN,
+);
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@repo/ui", "@repo/api-client"],

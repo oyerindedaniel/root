@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { SEARCH_PRODUCTS_INPUT_SCHEMA } from "@repo/contracts";
+import { SEARCH_PRODUCTS_INPUT_SCHEMA, type RegisteredTool } from "@repo/contracts";
 
 import { normalizeDiscoveredTool, rejectDuplicateToolNames } from "./normalize";
-import type { RegisteredTool } from "./model-context";
 
 function tool(overrides: Partial<RegisteredTool> = {}): RegisteredTool {
   return {
     name: "search_products",
     title: "Search products",
-    description: "Search the test catalog.",
+    description: "Search the catalog.",
     origin: "http://localhost:3002",
     inputSchema: SEARCH_PRODUCTS_INPUT_SCHEMA,
     annotations: { readOnlyHint: true, untrustedContentHint: false },

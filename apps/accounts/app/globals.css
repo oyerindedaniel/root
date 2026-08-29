@@ -4,6 +4,7 @@
 
 @source "../../../packages/ui/src";
 @source ".";
+@source "../lib";
 
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;

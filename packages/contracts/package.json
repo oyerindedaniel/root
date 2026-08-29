@@ -25,6 +25,10 @@
     "./shop": {
       "types": "./dist/shop.d.ts",
       "default": "./dist/shop.js"
+    },
+    "./customers": {
+      "types": "./dist/customers.d.ts",
+      "default": "./dist/customers.js"
     }
   },
   "files": [

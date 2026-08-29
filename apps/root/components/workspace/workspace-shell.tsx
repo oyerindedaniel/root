@@ -61,7 +61,7 @@ function WorkspaceDock() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Dock.Trigger
-                  ref={providerId ? restoreButtonRef : undefined}
+                  ref={mounted ? restoreButtonRef : undefined}
                   aria-label={pin.label}
                   onClick={
                     providerId ? () => activateProvider(providerId) : undefined
@@ -74,7 +74,7 @@ function WorkspaceDock() {
                     height={DOCK_ICON_SIZE}
                     className="pointer-events-none size-full select-none"
                   />
-                  {providerId ? (
+                  {mounted ? (
                     <span
                       ref={traySlotRef}
                       className="pointer-events-none absolute inset-0 overflow-hidden rounded-[22%]"

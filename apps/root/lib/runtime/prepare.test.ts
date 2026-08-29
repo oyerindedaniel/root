@@ -39,7 +39,7 @@ function readyState() {
         namespacedName: "shop.search_products",
         name: "search_products",
         title: "Search products",
-        description: "Search the test catalog.",
+        description: "Search the catalog.",
         origin: "http://localhost:3002",
         inputSchema: { type: "object" },
         schemaFingerprint: fingerprint,

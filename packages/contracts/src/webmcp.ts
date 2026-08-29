@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { stableStringify } from "./stable-json.js";
 
-export const providerIdSchema = z.enum(["shop"]);
+export const providerIdSchema = z.enum(["shop", "accounts"]);
 
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
@@ -90,6 +90,10 @@ export type BoundedResultEnvelope = z.infer<typeof boundedResultEnvelopeSchema>;
 export const SHOP_EXPECTED_TOOLS = ["search_products"] as const;
 
 export const SHOP_CONTRACT_VERSION = "1.0.0";
+
+export const ACCOUNTS_EXPECTED_TOOLS = ["search_customers"] as const;
+
+export const ACCOUNTS_CONTRACT_VERSION = "1.0.0";
 
 export const WEBMCP_DISCOVERY_TIMEOUT_MS = 8_000;
 

@@ -1,9 +1,9 @@
 import {
   serializeExecuteInput,
   type InvokeKind,
+  type ModelContext,
+  type RegisteredTool,
 } from "@repo/contracts";
-
-import type { ModelContext, RegisteredTool } from "./model-context";
 
 export async function executeRegisteredTool(options: {
   modelContext: ModelContext;

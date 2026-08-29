@@ -20,9 +20,15 @@ importers:
 
   apps/accounts:
     dependencies:
+      '@heroicons/react':
+        specifier: ^2.2.0
+        version: 2.2.0(react@19.2.8)
       '@repo/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@repo/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui

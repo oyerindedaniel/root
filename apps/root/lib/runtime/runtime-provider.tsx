@@ -43,7 +43,6 @@ import { useIsomorphicLayoutEffect } from "@/lib/use-isomorphic-layout-effect";
 import { discoverTools } from "@/lib/webmcp/discover";
 import { executeRegisteredTool } from "@/lib/webmcp/execute";
 import { ToolHandleRegistry } from "@/lib/webmcp/handles";
-import { getDocumentModelContext } from "@/lib/webmcp/model-context";
 import {
   normalizeDiscoveredTool,
   rejectDuplicateToolNames,
@@ -124,6 +123,11 @@ export function RuntimeProvider({
       ) {
         return current.provider.instanceId;
       }
+      if (current.provider.instanceId) {
+        motionAbortRef.current?.abort();
+        windowSessionRef.current.unbind();
+        handlesRef.current.invalidateInstance(current.provider.instanceId);
+      }
       const entry = getTrustedProvider(directory, providerId);
       const instanceId = `${entry.providerId}_${crypto.randomUUID()}`;
       dispatch({
@@ -151,13 +155,13 @@ export function RuntimeProvider({
     ): Promise<BoundedResultEnvelope> => {
       dispatch({ type: "control/set", control: "agent" });
       try {
-        const shop = getTrustedProvider(directory, input.providerId);
+        const entry = getTrustedProvider(directory, input.providerId);
         const instanceId = openProvider(input.providerId);
         await waitForLoad(instanceId);
         signal.throwIfAborted();
         dispatch({ type: "provider/discovering", instanceId });
 
-        const modelContext = getDocumentModelContext(document);
+        const modelContext = document.modelContext;
         if (!modelContext) {
           dispatch({ type: "webmcp/unavailable" });
           dispatch({
@@ -174,16 +178,16 @@ export function RuntimeProvider({
 
         const rawTools = await discoverTools({
           modelContext,
-          origin: shop.origin,
-          expectedNames: shop.expectedTools,
+          origin: entry.origin,
+          expectedNames: entry.expectedTools,
           signal,
         });
         const normalized = rejectDuplicateToolNames(
           rawTools.map((tool) =>
             normalizeDiscoveredTool({
-              providerId: "shop",
+              providerId: entry.providerId,
               instanceId,
-              expectedOrigin: shop.origin,
+              expectedOrigin: entry.origin,
               tool,
             }),
           ),
@@ -205,9 +209,9 @@ export function RuntimeProvider({
         return {
           status: "success",
           data: {
-            providerId: shop.providerId,
-            origin: shop.origin,
-            contractVersion: shop.contractVersion,
+            providerId: entry.providerId,
+            origin: entry.origin,
+            contractVersion: entry.contractVersion,
             tools: normalized.map((tool) => tool.descriptor),
           },
         };
@@ -225,7 +229,7 @@ export function RuntimeProvider({
             ? "discovery_timeout"
             : "discovery_failed";
         dispatch({ type: "provider/failed", reason: code });
-        return boundedError(code, "Catalog capability discovery failed.");
+        return boundedError(code, "Capability discovery failed.");
       } finally {
         dispatch({ type: "control/set", control: "human" });
       }
@@ -282,7 +286,7 @@ export function RuntimeProvider({
         return revalidated.error;
       }
 
-      const modelContext = getDocumentModelContext(document);
+      const modelContext = document.modelContext;
       if (!modelContext) {
         dispatch({ type: "webmcp/unavailable" });
         dispatch({
@@ -572,7 +576,6 @@ export function RuntimeProvider({
       dispatch,
       directory,
       account,
-      shop: directory.shop,
       workspaceRef,
       stageSlotRef,
       traySlotRef,
@@ -643,7 +646,7 @@ function ProviderIframe({
   const pin = pinForProvider(directory, state.provider.providerId);
 
   return (
-    <AppWindow.Root title={pin.label} icon={pin.icon}>
+    <AppWindow.Root key={state.provider.instanceId} title={pin.label} icon={pin.icon}>
       <iframe
         ref={iframeRef}
         src={state.provider.entryUrl}
