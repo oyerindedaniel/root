@@ -26,7 +26,7 @@ export default function RootLayout({ children }: PropsWithChildren) {
     <html
       lang="en"
       data-app="support"
-      className={`scrollbar-gutter-stable ${inter.variable} ${geistMono.variable}`}
+      className={`${inter.variable} ${geistMono.variable}`}
     >
       <body className="bg-background font-sans text-foreground antialiased">
         <TrpcReactProvider>{children}</TrpcReactProvider>

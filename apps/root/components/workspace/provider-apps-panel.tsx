@@ -18,6 +18,7 @@ import Image from "next/image";
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type FormEvent,
@@ -48,6 +49,27 @@ export function ProviderAppsPanel() {
   const [status, setStatus] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const reduceMotion = useReducedMotion();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestScrollTopRef = useRef(library.preferences.panel.appsScrollTop);
+
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current;
+    if (scroll) {
+      scroll.scrollTop = library.preferences.panel.appsScrollTop;
+    }
+  }, [library.preferences.panel.appsScrollTop]);
+
+  useEffect(
+    () => () => {
+      if (scrollSaveRef.current) {
+        clearTimeout(scrollSaveRef.current);
+        scrollSaveRef.current = null;
+        library.setAppsScrollTop(latestScrollTopRef.current);
+      }
+    },
+    [library],
+  );
 
   async function test(providerId: string) {
     setTesting(providerId);
@@ -62,7 +84,24 @@ export function ProviderAppsPanel() {
   }
 
   return (
-    <div className="scrollbar-none max-h-[min(28rem,70vh)] overflow-y-auto p-2">
+    <div
+      ref={scrollRef}
+      className="scrollbar-none max-h-[min(28rem,70vh)] overflow-y-auto p-2"
+      onScroll={(event) => {
+        const scrollTop = event.currentTarget.scrollTop;
+        if (scrollTop === library.preferences.panel.appsScrollTop) {
+          return;
+        }
+        latestScrollTopRef.current = scrollTop;
+        if (scrollSaveRef.current) {
+          clearTimeout(scrollSaveRef.current);
+        }
+        scrollSaveRef.current = setTimeout(() => {
+          scrollSaveRef.current = null;
+          library.setAppsScrollTop(latestScrollTopRef.current);
+        }, 120);
+      }}
+    >
       <div className="flex items-center justify-between gap-3 px-1 pb-2">
         <p className="text-sm text-white/60">
           {library.storageFailure

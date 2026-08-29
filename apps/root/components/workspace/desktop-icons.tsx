@@ -20,7 +20,8 @@ export function DesktopIcons() {
 
   return (
     <aside
-      className="absolute top-16 right-5 z-10 flex w-[76px] flex-col items-center gap-5"
+      dir="rtl"
+      className="absolute top-5 right-5 bottom-28 z-10 grid auto-cols-[4.75rem] grid-flow-col grid-rows-[repeat(auto-fill,6.5rem)] gap-5 justify-items-center"
       aria-label="Desktop"
       data-caliper-id="root-desktop-icons"
       onDragOver={(event) => {
@@ -82,7 +83,8 @@ function DesktopAlias({
   return (
     <button
       type="button"
-      className="flex w-full flex-col items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      dir="ltr"
+      className="flex h-full w-full min-w-0 flex-col items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
       onClick={onOpen}
       draggable={Boolean(reference)}
       onDragStart={(event) => {
@@ -98,7 +100,7 @@ function DesktopAlias({
         height={48}
         className="pointer-events-none size-12 select-none"
       />
-      <span className="w-full text-center text-xs leading-tight text-white [text-shadow:0_1px_2px_rgb(0_0_0_/_0.85)]">
+      <span className="line-clamp-2 w-full text-center text-xs leading-tight text-white [text-shadow:0_1px_2px_rgb(0_0_0_/_0.85)]">
         {name}
       </span>
     </button>

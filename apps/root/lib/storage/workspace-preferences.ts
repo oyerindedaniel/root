@@ -42,11 +42,24 @@ export const dockReferenceSchema = z.discriminatedUnion("kind", [
 
 export type DockReference = z.infer<typeof dockReferenceSchema>;
 
+export const workspacePanelSchema = z.strictObject({
+  tab: z.enum(["activity", "apps"]),
+  appsScrollTop: z.number().int().min(0).max(100_000),
+});
+
+export type WorkspacePanel = z.infer<typeof workspacePanelSchema>;
+
+export const DEFAULT_WORKSPACE_PANEL: WorkspacePanel = {
+  tab: "activity",
+  appsScrollTop: 0,
+};
+
 export const workspacePreferencesSchema = z
   .strictObject({
     version: z.literal(1),
     customProviders: z.array(customProviderSchema).max(MAX_CUSTOM_PROVIDERS),
     dock: z.array(dockReferenceSchema).max(MAX_DOCK_APPS),
+    panel: workspacePanelSchema.default(DEFAULT_WORKSPACE_PANEL),
   })
   .superRefine((preferences, context) => {
     const providerIds = new Set<string>();
@@ -87,5 +100,6 @@ export function createDefaultWorkspacePreferences(): WorkspacePreferences {
     version: 1,
     customProviders: [],
     dock: DEFAULT_DOCK.map((reference) => ({ ...reference })),
+    panel: { ...DEFAULT_WORKSPACE_PANEL },
   };
 }

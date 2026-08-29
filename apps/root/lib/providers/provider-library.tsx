@@ -51,6 +51,8 @@ export type ProviderLibraryApi = {
   move: (reference: DockReference, offset: -1 | 1) => void;
   resetDock: () => void;
   isPinned: (reference: DockReference) => boolean;
+  setPanelTab: (tab: WorkspacePreferences["panel"]["tab"]) => void;
+  setAppsScrollTop: (scrollTop: number) => void;
 };
 
 const ProviderLibraryContext = createContext<ProviderLibraryApi | null>(null);
@@ -140,6 +142,21 @@ export function ProviderLibraryProvider({
           (entry) =>
             entry.kind === reference.kind && entry.id === reference.id,
         );
+      },
+      setPanelTab(tab) {
+        update((current) => ({
+          ...current,
+          panel: { ...current.panel, tab },
+        }));
+      },
+      setAppsScrollTop(scrollTop) {
+        update((current) => ({
+          ...current,
+          panel: {
+            ...current.panel,
+            appsScrollTop: Math.max(0, Math.round(scrollTop)),
+          },
+        }));
       },
     };
   }, [defaults.dock, directory.builtins, resolved, store]);

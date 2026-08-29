@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Tabs } from "@/components/ui/tabs";
 import { ProviderAppsPanel } from "@/components/workspace/provider-apps-panel";
 import { WorkflowMotionDebug } from "@/components/workspace/workflow-motion-debug";
+import { useProviderLibrary } from "@/lib/providers/provider-library";
 
 export type WorkflowActivityRow = {
   label: string;
@@ -18,8 +19,9 @@ export type WorkflowActivityRow = {
 };
 
 export function WorkflowPanel({ rows }: { rows: WorkflowActivityRow[] }) {
-  const [tab, setTab] = useState<"activity" | "apps">("activity");
+  const library = useProviderLibrary();
   const [animateTransition, setAnimateTransition] = useState(true);
+  const tab = library.preferences.panel.tab;
   const reduceMotion = useReducedMotion();
   const animateContent = !reduceMotion && animateTransition;
   const activityRowPx = 32;
@@ -111,7 +113,7 @@ export function WorkflowPanel({ rows }: { rows: WorkflowActivityRow[] }) {
           const animate = motion === "animate";
           setAnimateTransition(animate);
           skipNextHeightAnimationRef.current = !animate;
-          setTab(value);
+          library.setPanelTab(value);
         }
       }}
     >
