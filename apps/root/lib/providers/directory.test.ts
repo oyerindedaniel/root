@@ -4,6 +4,7 @@ import {
   DirectoryError,
   getTrustedProvider,
   loadProviderDirectory,
+  pinForProvider,
 } from "./directory";
 
 const env = {
@@ -13,11 +14,20 @@ const env = {
 };
 
 describe("loadProviderDirectory", () => {
-  it("loads the trusted Catalog entry", () => {
+  it("loads the trusted shop entry and ordered pins", () => {
     const directory = loadProviderDirectory(env);
     expect(directory.shop.providerId).toBe("shop");
     expect(directory.shop.origin).toBe("http://localhost:3002");
     expect(directory.shop.expectedTools).toEqual(["search_products"]);
+    expect(directory.pins.map((pin) => pin.id)).toEqual([
+      "customers",
+      "shop",
+      "cases",
+    ]);
+    expect(pinForProvider(directory, "shop").label).toBe("Catalog");
+    expect(directory.pins.filter((pin) => pin.providerId).map((pin) => pin.providerId)).toEqual([
+      "shop",
+    ]);
   });
 
   it("rejects a missing env value", () => {

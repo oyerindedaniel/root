@@ -12,6 +12,7 @@ const account = {
 function mounted(state: RuntimeState = createInitialRuntimeState(account)) {
   return runtimeReducer(state, {
     type: "provider/mount",
+    providerId: "shop",
     instanceId: "shop_1",
     origin: "http://localhost:3002",
     entryUrl: "http://localhost:3002/",
@@ -29,6 +30,7 @@ describe("runtimeReducer", () => {
   it("walks mount loaded discovering ready", () => {
     let state = mounted();
     expect(state.provider.lifecycle).toBe("mounting");
+    expect(state.provider.providerId).toBe("shop");
     state = runtimeReducer(state, {
       type: "provider/loaded",
       instanceId: "shop_1",

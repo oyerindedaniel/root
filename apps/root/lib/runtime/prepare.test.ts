@@ -21,6 +21,7 @@ function readyState() {
   let state = createInitialRuntimeState(account);
   state = runtimeReducer(state, {
     type: "provider/mount",
+    providerId: "shop",
     instanceId: "shop_1",
     origin: "http://localhost:3002",
     entryUrl: "http://localhost:3002/",

@@ -1,12 +1,10 @@
-import type { ReactNode } from "react";
+import type { PropsWithChildren } from "react";
 
 import { requireAccount } from "@/lib/auth/account";
 
 export default async function WorkspaceTemplate({
   children,
-}: {
-  children: ReactNode;
-}) {
+}: PropsWithChildren) {
   await requireAccount();
   return children;
 }

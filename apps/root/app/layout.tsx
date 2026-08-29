@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { PropsWithChildren } from "react";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import Script from "next/script";
@@ -22,11 +23,7 @@ export const metadata: Metadata = {
   description: "Governed workflows across trusted web apps.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: PropsWithChildren) {
   return (
     <html
       lang="en"

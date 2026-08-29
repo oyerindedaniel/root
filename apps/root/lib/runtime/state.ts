@@ -2,6 +2,7 @@ import type {
   Account,
   NormalizedToolDescriptor,
   PreparedShopSearchStep,
+  ProviderId,
   ProviderLifecycle,
   ProviderPlacement,
   WorkflowLifecycle,
@@ -18,6 +19,7 @@ export type RuntimeState = {
   webmcpStatus: WebmcpStatus;
   account: Account;
   provider: {
+    providerId: ProviderId | null;
     instanceId: string | null;
     origin: string | null;
     entryUrl: string | null;
@@ -45,7 +47,13 @@ export type RuntimeAction =
   | { type: "session/signed-out" }
   | { type: "webmcp/available" }
   | { type: "webmcp/unavailable" }
-  | { type: "provider/mount"; instanceId: string; origin: string; entryUrl: string }
+  | {
+      type: "provider/mount";
+      providerId: ProviderId;
+      instanceId: string;
+      origin: string;
+      entryUrl: string;
+    }
   | { type: "provider/loaded"; instanceId: string }
   | { type: "provider/discovering"; instanceId: string }
   | {
@@ -75,6 +83,7 @@ export function createInitialRuntimeState(account: Account): RuntimeState {
     webmcpStatus: "unknown",
     account,
     provider: {
+      providerId: null,
       instanceId: null,
       origin: null,
       entryUrl: null,

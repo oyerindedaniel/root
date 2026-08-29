@@ -12,16 +12,19 @@ import {
 } from "@repo/contracts";
 import {
   useCallback,
-  useEffect,
   useMemo,
   useReducer,
   useRef,
-  type ReactNode,
+  type PropsWithChildren,
+  type RefObject,
 } from "react";
-import { animateSuction, layoutFromRect, prefersReducedMotion } from "@/lib/motion/suction";
+import { AppWindow } from "@/components/workspace/app-window";
+import { applyFrame, layoutFromRect } from "@/lib/window/frame";
+import { createWindowSession } from "@/lib/window/session";
 import {
   DirectoryError,
   getTrustedProvider,
+  pinForProvider,
   type ProviderDirectory,
 } from "@/lib/providers/directory";
 import { GatewayRegistrar } from "@/lib/runtime/gateway-registrar";
@@ -56,17 +59,17 @@ export function RuntimeProvider({
   account,
   directory,
   children,
-}: {
+}: PropsWithChildren<{
   account: Account;
   directory: ProviderDirectory;
-  children: ReactNode;
-}) {
+}>) {
   const [state, dispatch] = useReducer(
     runtimeReducer,
     account,
     createInitialRuntimeState,
   );
   const stateRef = useRef(state);
+
   useIsomorphicLayoutEffect(() => {
     stateRef.current = state;
   });
@@ -82,6 +85,8 @@ export function RuntimeProvider({
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const restoreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const windowSessionRef = useRef(createWindowSession());
+  const layoutRafRef = useRef(0);
 
   const waitForLoad = useCallback((instanceId: string) => {
     const existing = loadWaiterRef.current;
@@ -110,21 +115,34 @@ export function RuntimeProvider({
     loadWaiterRef.current?.resolve();
   }, []);
 
-  const openCatalog = useCallback(() => {
-    const current = stateRef.current;
-    if (current.provider.instanceId) {
-      return current.provider.instanceId;
-    }
-    const shop = getTrustedProvider(directory, "shop");
-    const instanceId = `shop_${crypto.randomUUID()}`;
-    dispatch({
-      type: "provider/mount",
-      instanceId,
-      origin: shop.origin,
-      entryUrl: shop.entryUrl,
-    });
-    return instanceId;
-  }, [directory]);
+  const openProvider = useCallback(
+    (providerId: string) => {
+      const current = stateRef.current;
+      if (
+        current.provider.instanceId &&
+        current.provider.providerId === providerId
+      ) {
+        return current.provider.instanceId;
+      }
+      const entry = getTrustedProvider(directory, providerId);
+      const instanceId = `${entry.providerId}_${crypto.randomUUID()}`;
+      dispatch({
+        type: "provider/mount",
+        providerId: entry.providerId,
+        instanceId,
+        origin: entry.origin,
+        entryUrl: entry.entryUrl,
+      });
+      return instanceId;
+    },
+    [directory],
+  );
+
+  const closeProvider = useCallback(() => {
+    motionAbortRef.current?.abort();
+    windowSessionRef.current.unbind();
+    dispatch({ type: "provider/unmount" });
+  }, []);
 
   const discoverCapabilities = useCallback(
     async (
@@ -134,7 +152,7 @@ export function RuntimeProvider({
       dispatch({ type: "control/set", control: "agent" });
       try {
         const shop = getTrustedProvider(directory, input.providerId);
-        const instanceId = openCatalog();
+        const instanceId = openProvider(input.providerId);
         await waitForLoad(instanceId);
         signal.throwIfAborted();
         dispatch({ type: "provider/discovering", instanceId });
@@ -212,7 +230,7 @@ export function RuntimeProvider({
         dispatch({ type: "control/set", control: "human" });
       }
     },
-    [directory, openCatalog, waitForLoad],
+    [directory, openProvider, waitForLoad],
   );
 
   const prepareWorkflow = useCallback((input: unknown): BoundedResultEnvelope => {
@@ -412,20 +430,35 @@ export function RuntimeProvider({
   const applySurfaceLayout = useCallback((placement: "stage" | "tray") => {
     const workspace = workspaceRef.current;
     const surface = surfaceRef.current;
-    const slot =
-      placement === "stage" ? stageSlotRef.current : traySlotRef.current;
-    if (!workspace || !surface || !slot) {
+    const workArea = stageSlotRef.current;
+    const tray = traySlotRef.current;
+    const session = windowSessionRef.current;
+    if (!workspace || !surface || !workArea) {
       return;
     }
-    const layout = layoutFromRect(
-      workspace.getBoundingClientRect(),
-      slot.getBoundingClientRect(),
-    );
-    surface.style.top = `${layout.top}px`;
-    surface.style.left = `${layout.left}px`;
-    surface.style.width = `${layout.width}px`;
-    surface.style.height = `${layout.height}px`;
-    surface.inert = placement === "tray";
+    session.bind({
+      window: surface,
+      workspace,
+      workArea,
+      iframe: iframeRef.current,
+    });
+    if (placement === "tray") {
+      if (!tray) {
+        return;
+      }
+      applyFrame(surface, layoutFromRect(
+        workspace.getBoundingClientRect(),
+        tray.getBoundingClientRect(),
+      ));
+      surface.inert = true;
+      return;
+    }
+    if (session.hasFrame()) {
+      session.applyCurrent();
+    } else {
+      session.openStage();
+    }
+    surface.inert = false;
   }, []);
 
   const requestPlacement = useCallback(
@@ -445,44 +478,45 @@ export function RuntimeProvider({
       if (!surface || !workspace || !destination) {
         return;
       }
-      motionAbortRef.current?.abort();
-      const motionAbort = new AbortController();
-      motionAbortRef.current = motionAbort;
-      dispatch({ type: "placement/request", placement });
-      surface.inert = true;
-      const from = surface.getBoundingClientRect();
-      applySurfaceLayout(placement);
-      const to = surface.getBoundingClientRect();
-      const finish = () => {
-        surface.inert = placement === "tray";
-        dispatch({ type: "motion/finish", placement });
-        if (placement === "tray") {
-          restoreButtonRef.current?.focus();
-        } else {
-          stageSlotRef.current?.focus();
-        }
-      };
-      if (prefersReducedMotion()) {
-        finish();
-        return;
+      if (placement === "tray") {
+        windowSessionRef.current.snapshotStage();
       }
-      void animateSuction({
-        surface,
-        from,
-        to,
-        signal: motionAbort.signal,
-      })
-        .then(finish)
-        .catch(() => {
-          surface.inert =
-            stateRef.current.provider.placement === "tray";
-        });
+      if (placement === "stage") {
+        windowSessionRef.current.restoreStage();
+      } else {
+        applySurfaceLayout("tray");
+      }
+      surface.inert = placement === "tray";
+      dispatch({ type: "motion/finish", placement });
+      if (placement === "tray") {
+        restoreButtonRef.current?.focus();
+      } else {
+        stageSlotRef.current?.focus();
+      }
     },
     [applySurfaceLayout],
   );
 
-  useEffect(() => {
+  const activateProvider = useCallback(
+    (providerId: string) => {
+      const current = stateRef.current;
+      if (
+        current.provider.providerId === providerId &&
+        current.provider.lifecycle !== "unmounted"
+      ) {
+        if (current.provider.placement === "tray") {
+          requestPlacement("stage");
+        }
+        return;
+      }
+      openProvider(providerId);
+    },
+    [openProvider, requestPlacement],
+  );
+
+  useIsomorphicLayoutEffect(() => {
     if (state.provider.lifecycle === "unmounted") {
+      windowSessionRef.current.unbind();
       return;
     }
     applySurfaceLayout(state.provider.placement);
@@ -491,10 +525,45 @@ export function RuntimeProvider({
       return;
     }
     const observer = new ResizeObserver(() => {
-      applySurfaceLayout(stateRef.current.provider.placement);
+      if (layoutRafRef.current) {
+        return;
+      }
+      layoutRafRef.current = requestAnimationFrame(() => {
+        layoutRafRef.current = 0;
+        const current = stateRef.current;
+        if (
+          current.motion === "suction" ||
+          current.provider.lifecycle === "unmounted"
+        ) {
+          return;
+        }
+        if (current.provider.placement === "tray") {
+          applySurfaceLayout("tray");
+          return;
+        }
+        windowSessionRef.current.relayout();
+      });
     });
     observer.observe(workspace);
-    return () => observer.disconnect();
+    const workArea = stageSlotRef.current;
+    if (workArea) {
+      observer.observe(workArea);
+    }
+    if (
+      state.provider.placement === "stage" &&
+      !windowSessionRef.current.hasFrame()
+    ) {
+      requestAnimationFrame(() => {
+        windowSessionRef.current.openStage();
+      });
+    }
+    return () => {
+      observer.disconnect();
+      if (layoutRafRef.current) {
+        cancelAnimationFrame(layoutRafRef.current);
+        layoutRafRef.current = 0;
+      }
+    };
   }, [applySurfaceLayout, state.provider.lifecycle, state.provider.placement]);
 
   const api = useMemo<RuntimeApi>(
@@ -511,9 +580,20 @@ export function RuntimeProvider({
       iframeRef,
       restoreButtonRef,
       requestPlacement,
-      openCatalog,
+      openProvider,
+      closeProvider,
+      activateProvider,
+      windowSession: windowSessionRef.current,
     }),
-    [account, directory, openCatalog, requestPlacement, state],
+    [
+      account,
+      directory,
+      openProvider,
+      closeProvider,
+      activateProvider,
+      requestPlacement,
+      state,
+    ],
   );
 
   return (
@@ -522,8 +602,8 @@ export function RuntimeProvider({
         {children}
         <ProviderIframe
           state={state}
+          directory={directory}
           iframeRef={iframeRef}
-          surfaceRef={surfaceRef}
           onLoad={onIframeLoad}
         />
       </div>
@@ -543,36 +623,35 @@ export function RuntimeProvider({
 
 function ProviderIframe({
   state,
+  directory,
   iframeRef,
-  surfaceRef,
   onLoad,
 }: {
   state: RuntimeState;
-  iframeRef: React.RefObject<HTMLIFrameElement | null>;
-  surfaceRef: React.RefObject<HTMLDivElement | null>;
+  directory: ProviderDirectory;
+  iframeRef: RefObject<HTMLIFrameElement | null>;
   onLoad: () => void;
 }) {
-  if (state.provider.lifecycle === "unmounted" || !state.provider.entryUrl) {
+  if (
+    state.provider.lifecycle === "unmounted" ||
+    !state.provider.entryUrl ||
+    !state.provider.providerId
+  ) {
     return null;
   }
 
+  const pin = pinForProvider(directory, state.provider.providerId);
+
   return (
-    <div
-      ref={surfaceRef}
-      className={
-        state.provider.placement === "tray"
-          ? "pointer-events-none absolute z-20 overflow-hidden rounded-2xl bg-background"
-          : "absolute z-10 overflow-hidden bg-background"
-      }
-    >
+    <AppWindow.Root title={pin.label} icon={pin.icon}>
       <iframe
         ref={iframeRef}
         src={state.provider.entryUrl}
         allow="tools"
-        title="Catalog"
+        title={pin.label}
         className="size-full border-0"
         onLoad={onLoad}
       />
-    </div>
+    </AppWindow.Root>
   );
 }

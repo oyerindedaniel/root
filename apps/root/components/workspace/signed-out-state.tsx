@@ -17,7 +17,7 @@ export function SignedOutState() {
       <div className="max-w-md rounded-lg border border-border bg-background p-6">
         <h2 className="text-3xl font-medium">Session ended</h2>
         <p className="mt-3 text-base text-muted-foreground">
-          The API no longer has a session. Sign in again to continue.
+          Your session ended. Sign in again to continue.
         </p>
         <Button
           className="mt-4"

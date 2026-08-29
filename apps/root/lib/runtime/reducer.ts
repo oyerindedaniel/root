@@ -19,6 +19,7 @@ export function runtimeReducer(
       return {
         ...state,
         provider: {
+          providerId: action.providerId,
           instanceId: action.instanceId,
           origin: action.origin,
           entryUrl: action.entryUrl,

@@ -5,7 +5,7 @@ import { cn } from "@repo/ui/lib/cn";
 import { useRuntime } from "@/lib/runtime/runtime-context";
 import type { RuntimeState } from "@/lib/runtime/state";
 
-export function WorkflowCapsule() {
+export function WorkflowStatus() {
   const { state } = useRuntime();
   const running =
     state.workflow.lifecycle === "executing" ||
@@ -13,7 +13,7 @@ export function WorkflowCapsule() {
     state.provider.lifecycle === "discovering" ||
     state.provider.lifecycle === "executing";
 
-  const label = capsuleLabel(state);
+  const label = statusLabel(state);
   if (!label) {
     return null;
   }
@@ -24,7 +24,7 @@ export function WorkflowCapsule() {
         "absolute top-4 right-4 z-20 flex h-8 max-w-xs min-w-0 items-center truncate rounded-3xl px-3 text-sm font-medium",
         running
           ? "animate-workflow bg-size-[200%_100%] bg-linear-to-r from-primary-wash via-primary-mute to-primary-wash text-primary-ink"
-          : capsuleTone(state.workflow.lifecycle),
+          : statusTone(state.workflow.lifecycle),
       )}
     >
       {label}
@@ -32,7 +32,7 @@ export function WorkflowCapsule() {
   );
 }
 
-function capsuleTone(lifecycle: string) {
+function statusTone(lifecycle: string) {
   if (lifecycle === "passed") {
     return "bg-success-wash/90 text-success-ink backdrop-blur-md";
   }
@@ -42,7 +42,7 @@ function capsuleTone(lifecycle: string) {
   return "bg-white/80 text-foreground backdrop-blur-md";
 }
 
-function capsuleLabel(state: RuntimeState) {
+function statusLabel(state: RuntimeState) {
   if (state.sessionStatus === "signed-out") {
     return "Session ended";
   }

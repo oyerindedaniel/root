@@ -35,6 +35,7 @@ export function TooltipContent({
   className,
   side = "top",
   sideOffset = 6,
+  children,
   ...props
 }: ComponentProps<typeof TooltipPrimitive.Content>) {
   return (
@@ -47,7 +48,10 @@ export function TooltipContent({
           className,
         )}
         {...props}
-      />
+      >
+        {children}
+        <TooltipPrimitive.Arrow className="fill-black/80" width={10} height={5} />
+      </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );
 }

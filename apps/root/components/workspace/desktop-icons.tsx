@@ -8,8 +8,7 @@ import { useRuntime } from "@/lib/runtime/runtime-context";
 
 export function DesktopIcons() {
   const router = useRouter();
-  const { state, openCatalog, requestPlacement } = useRuntime();
-  const mounted = state.provider.lifecycle !== "unmounted";
+  const { directory, activateProvider } = useRuntime();
 
   return (
     <aside
@@ -17,21 +16,17 @@ export function DesktopIcons() {
       aria-label="Desktop"
       data-caliper-id="root-desktop-icons"
     >
-      <DesktopAlias src="/icons/customers-icon.webp" name="Customers" />
-      <DesktopAlias
-        src="/icons/catalog-icon.webp"
-        name="Catalog"
-        onOpen={() => {
-          if (!mounted) {
-            openCatalog();
-            return;
-          }
-          if (state.provider.placement === "tray") {
-            requestPlacement("stage");
-          }
-        }}
-      />
-      <DesktopAlias src="/icons/cases-icon.webp" name="Cases" />
+      {directory.pins.map((pin) => {
+        const providerId = pin.providerId;
+        return (
+          <DesktopAlias
+            key={pin.id}
+            src={pin.icon}
+            name={pin.label}
+            onOpen={providerId ? () => activateProvider(providerId) : undefined}
+          />
+        );
+      })}
       <DesktopAlias src="/icons/operator-icon.webp" name="User" />
       <DesktopAlias
         src="/icons/signout-icon.webp"

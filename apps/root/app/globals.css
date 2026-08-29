@@ -30,6 +30,11 @@
   background-size: cover;
 }
 
+@utility app-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 0.28) transparent;
+}
+
 @utility dock-glass {
   background-color: rgb(255 255 255 / 0.1);
   backdrop-filter: blur(40px) saturate(180%);
@@ -38,4 +43,9 @@
     0 8px 32px rgb(0 0 0 / 0.28),
     inset 0 1px 0 rgb(255 255 255 / 0.55),
     inset 0 -1px 0 rgb(255 255 255 / 0.12);
+}
+
+html[data-window-cursor],
+html[data-window-cursor] * {
+  cursor: var(--window-cursor) !important;
 }

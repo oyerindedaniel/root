@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { PropsWithChildren } from "react";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import { TrpcReactProvider } from "@repo/api-client";
@@ -20,11 +21,7 @@ export const metadata: Metadata = {
   description: "Service application with customer and order projections.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: PropsWithChildren) {
   return (
     <html
       lang="en"

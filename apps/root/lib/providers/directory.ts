@@ -22,10 +22,39 @@ export type ProviderDirectoryEnv = {
   NEXT_PUBLIC_SHOP_ENTRY_URL?: string;
 };
 
+export type WorkspacePin = {
+  id: string;
+  label: string;
+  icon: string;
+  providerId: ProviderId | null;
+};
+
 export type ProviderDirectory = {
   rootOrigin: string;
   shop: TrustedProviderEntry;
+  pins: readonly WorkspacePin[];
 };
+
+export const WORKSPACE_PINS: readonly WorkspacePin[] = [
+  {
+    id: "customers",
+    label: "Customers",
+    icon: "/icons/customers-icon.webp",
+    providerId: null,
+  },
+  {
+    id: "shop",
+    label: "Catalog",
+    icon: "/icons/catalog-icon.webp",
+    providerId: "shop",
+  },
+  {
+    id: "cases",
+    label: "Cases",
+    icon: "/icons/cases-icon.webp",
+    providerId: null,
+  },
+];
 
 function requiredEnv(
   env: ProviderDirectoryEnv,
@@ -76,7 +105,22 @@ export function loadProviderDirectory(
       contractVersion: SHOP_CONTRACT_VERSION,
       expectedTools: [...SHOP_EXPECTED_TOOLS],
     },
+    pins: WORKSPACE_PINS,
   };
+}
+
+export function pinForProvider(
+  directory: ProviderDirectory,
+  providerId: ProviderId,
+): WorkspacePin {
+  const pin = directory.pins.find((entry) => entry.providerId === providerId);
+  if (!pin) {
+    throw new DirectoryError(
+      "unknown_provider",
+      "Provider is not in the trusted directory.",
+    );
+  }
+  return pin;
 }
 
 export function getTrustedProvider(

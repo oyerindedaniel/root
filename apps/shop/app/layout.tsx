@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { PropsWithChildren } from "react";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import { TrpcReactProvider } from "@repo/api-client";
@@ -20,16 +21,12 @@ export const metadata: Metadata = {
   description: "Storefront and synthetic-order application.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: PropsWithChildren) {
   return (
     <html
       lang="en"
       data-app="shop"
-      className={`scrollbar-gutter-stable ${inter.variable} ${geistMono.variable}`}
+      className={`app-scroll ${inter.variable} ${geistMono.variable}`}
     >
       <body className="bg-background font-sans text-foreground antialiased">
         <TrpcReactProvider>{children}</TrpcReactProvider>
