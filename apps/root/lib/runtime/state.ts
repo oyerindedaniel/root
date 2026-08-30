@@ -112,7 +112,7 @@ export type RuntimeState = {
 };
 
 export type RuntimeAction =
-  | { type: "session/signed-out" }
+  | { type: "session/ended" }
   | { type: "webmcp/available" }
   | { type: "webmcp/unavailable" }
   | {

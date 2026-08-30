@@ -13,9 +13,16 @@ export function SignedOutState() {
   }
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/90 p-6">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="session-ended-title"
+      className="absolute inset-0 z-[2147483647] flex items-center justify-center bg-background/90 p-6"
+    >
       <div className="max-w-md rounded-lg border border-border bg-background p-6">
-        <h2 className="text-3xl font-medium">Session ended</h2>
+        <h2 id="session-ended-title" className="text-3xl font-medium">
+          Session ended
+        </h2>
         <p className="mt-3 text-base text-muted-foreground">
           Your session ended. Sign in again to continue.
         </p>

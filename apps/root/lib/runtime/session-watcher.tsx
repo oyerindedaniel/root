@@ -1,21 +1,39 @@
 "use client";
 
-import { useTRPC } from "@repo/api-client";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
-export function SessionWatcher({ onSignedOut }: { onSignedOut: () => void }) {
+import { TRPCClientError, useTRPC } from "@repo/api-client";
+import type { Account } from "@repo/contracts";
+
+export function SessionWatcher({
+  account,
+  onSessionEnded,
+}: {
+  account: Account;
+  onSessionEnded: () => void;
+}) {
   const trpc = useTRPC();
   const me = useQuery({
     ...trpc.v1.auth.me.queryOptions(),
+    initialData: account,
+    refetchOnMount: false,
+    refetchOnWindowFocus: "always",
     retry: false,
   });
+  const announced = useRef(false);
 
   useEffect(() => {
-    if (me.error) {
-      onSignedOut();
+    if (
+      announced.current ||
+      !(me.error instanceof TRPCClientError) ||
+      me.error.data?.code !== "UNAUTHORIZED"
+    ) {
+      return;
     }
-  }, [me.error, onSignedOut]);
+    announced.current = true;
+    onSessionEnded();
+  }, [me.error, onSessionEnded]);
 
   return null;
 }

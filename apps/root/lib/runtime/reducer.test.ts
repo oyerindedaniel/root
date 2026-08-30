@@ -50,11 +50,18 @@ function catalogResult() {
 }
 
 describe("runtimeReducer", () => {
-  it("starts unmounted and signed in", () => {
+  it("starts unmounted", () => {
     const state = createInitialRuntimeState(account);
     expect(state.provider.lifecycle).toBe("unmounted");
     expect(state.workflow.lifecycle).toBe("draft");
-    expect(state.sessionStatus).toBe("authenticated");
+  });
+
+  it("records an ended session once without clearing the account", () => {
+    const initial = createInitialRuntimeState(account);
+    const state = runtimeReducer(initial, { type: "session/ended" });
+    expect(state.sessionStatus).toBe("signed-out");
+    expect(state.account.email).toBe("dev@localhost");
+    expect(runtimeReducer(state, { type: "session/ended" })).toBe(state);
   });
 
   it("walks mount loaded discovering ready", () => {
@@ -219,14 +226,6 @@ describe("runtimeReducer", () => {
     expect(state.workflow.lifecycle).toBe("failed");
     expect(state.workflow.failureReason).toBe("revalidation_failed");
     expect(state.workflow.steps).toEqual([catalogStep()]);
-  });
-
-  it("records a signed-out session without clearing the account", () => {
-    const state = runtimeReducer(createInitialRuntimeState(account), {
-      type: "session/signed-out",
-    });
-    expect(state.sessionStatus).toBe("signed-out");
-    expect(state.account.email).toBe("dev@localhost");
   });
 
   it("finishes suction onto the tray", () => {

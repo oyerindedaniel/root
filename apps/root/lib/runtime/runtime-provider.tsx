@@ -31,6 +31,7 @@ import {
   type RefObject,
 } from "react";
 import { AppWindow } from "@/components/workspace/app-window";
+import { SignedOutState } from "@/components/workspace/signed-out-state";
 import { applyFrame, layoutFromRect } from "@/lib/window/frame";
 import { createWindowSession } from "@/lib/window/session";
 import {
@@ -110,6 +111,11 @@ export function RuntimeProvider({
   const restoreButtonRef = useRef<HTMLButtonElement | null>(null);
   const [windowSession] = useState(createWindowSession);
   const layoutRafRef = useRef(0);
+  const sessionEnded = state.sessionStatus === "signed-out";
+
+  const onSessionEnded = useCallback(() => {
+    dispatch({ type: "session/ended" });
+  }, []);
 
   const waitForLoad = useCallback((instanceId: string) => {
     const existing = loadWaiterRef.current;
@@ -671,13 +677,19 @@ export function RuntimeProvider({
   return (
     <RuntimeContextProvider value={api}>
       <div ref={workspaceRef} className="desktop-canvas relative flex h-dvh flex-col overflow-hidden">
-        {children}
-        <ProviderIframe
-          state={state}
-          catalog={catalog}
-          iframeRef={iframeRef}
-          onLoad={onIframeLoad}
-        />
+        <div
+          inert={sessionEnded ? true : undefined}
+          className="relative h-full min-h-0 w-full flex-1"
+        >
+          {children}
+          <ProviderIframe
+            state={state}
+            catalog={catalog}
+            iframeRef={iframeRef}
+            onLoad={onIframeLoad}
+          />
+        </div>
+        <SignedOutState />
       </div>
       <GatewayRegistrar
         listProviders={listProviders}
@@ -688,9 +700,9 @@ export function RuntimeProvider({
         cancelWorkflow={cancelWorkflow}
         inspectWorkflow={inspectWorkflow}
       />
-      <SessionWatcher
-        onSignedOut={() => dispatch({ type: "session/signed-out" })}
-      />
+      {!sessionEnded ? (
+        <SessionWatcher account={account} onSessionEnded={onSessionEnded} />
+      ) : null}
     </RuntimeContextProvider>
   );
 }

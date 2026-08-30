@@ -425,9 +425,6 @@ function pillLabel(
   running: boolean,
   failed: boolean,
 ) {
-  if (state.sessionStatus === "signed-out") {
-    return "Session ended";
-  }
   if (failed) {
     return "Failed";
   }

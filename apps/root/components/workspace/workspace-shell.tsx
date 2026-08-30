@@ -14,7 +14,6 @@ import {
 import { DesktopIcons } from "@/components/workspace/desktop-icons";
 import { Dock } from "@/components/workspace/dock";
 import { ProviderStage } from "@/components/workspace/provider-stage";
-import { SignedOutState } from "@/components/workspace/signed-out-state";
 import { WorkflowStatus } from "@/components/workspace/workflow-status";
 import { DOCK_ICON_SIZE } from "@/lib/dock/magnify";
 import {
@@ -48,7 +47,6 @@ export function WorkspaceShell({
           <DesktopIcons />
           <ProviderStage />
           <WorkspaceDock />
-          <SignedOutState />
         </TooltipProvider>
       </RuntimeProvider>
     </ProviderLibraryProvider>

@@ -15,7 +15,10 @@ export function runtimeReducer(
   action: RuntimeAction,
 ): RuntimeState {
   switch (action.type) {
-    case "session/signed-out":
+    case "session/ended":
+      if (state.sessionStatus === "signed-out") {
+        return state;
+      }
       return { ...state, sessionStatus: "signed-out", control: "human" };
     case "webmcp/available":
       return { ...state, webmcpStatus: "available" };

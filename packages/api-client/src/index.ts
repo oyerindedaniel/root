@@ -2,6 +2,7 @@
 
 export { apiBaseUrl, apiUpstreamUrl, trpcHttpUrl } from "./env";
 export { authClient } from "./auth-client";
+export { TRPCClientError } from "@trpc/client";
 export { makeQueryClient } from "./query-client";
 export {
   TRPCProvider,
