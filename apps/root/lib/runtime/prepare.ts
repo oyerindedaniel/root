@@ -1,7 +1,7 @@
 import {
   boundedError,
   MAX_PREPARED_WORKFLOW_STEPS,
-  type BuiltinWorkflowProviderId,
+  type BuiltinProviderId,
   type BoundedError,
   type NormalizedToolDescriptor,
   type PreparedWorkflowStep,
@@ -15,7 +15,7 @@ export function prepareWorkflow(options: {
   state: RuntimeState;
   steps: unknown[];
   workflowId: string;
-  origins: Record<BuiltinWorkflowProviderId, string>;
+  origins: Record<BuiltinProviderId, string>;
 }):
   | { ok: true; workflowId: string; steps: PreparedWorkflowStep[] }
   | { ok: false; error: BoundedError } {
@@ -27,7 +27,7 @@ export function prepareWorkflow(options: {
       ok: false,
       error: boundedError(
         "unsupported_graph",
-        "This pass accepts one or two sequential read-only search steps.",
+        `This pass accepts 1 to ${MAX_PREPARED_WORKFLOW_STEPS} sequential read-only search steps.`,
       ),
     };
   }
@@ -112,7 +112,7 @@ export function revalidatePreparedStep(options: {
 function bindProposedStep(options: {
   raw: unknown;
   state: RuntimeState;
-  origins: Record<BuiltinWorkflowProviderId, string>;
+  origins: Record<BuiltinProviderId, string>;
 }):
   | { ok: true; step: PreparedWorkflowStep }
   | { ok: false; error: BoundedError } {

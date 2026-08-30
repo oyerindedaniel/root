@@ -17,7 +17,8 @@
     "docker:ps": "docker compose --env-file apps/api/.env.local ps",
     "db:generate": "pnpm --filter @repo/db db:generate",
     "db:migrate": "pnpm --filter @repo/db db:migrate",
-    "db:seed": "pnpm --filter @repo/api db:seed"
+    "db:seed": "pnpm --filter @repo/api db:seed",
+    "db:seed:providers": "pnpm --filter @repo/api db:seed:providers"
   },
   "devDependencies": {
     "prettier": "3.9.6",

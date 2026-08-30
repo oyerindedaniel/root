@@ -14,9 +14,9 @@ export const shopRouter = createTrpcRouter({
   searchProducts: publicProcedure
     .input(searchProductsInputSchema)
     .output(searchProductsOutputSchema)
-    .query(({ input }) => ({
+    .query(async ({ input }) => ({
       status: "success" as const,
       query: input.query,
-      products: searchCatalog(input.query),
+      products: await searchCatalog(input.query),
     })),
 });

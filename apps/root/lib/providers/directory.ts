@@ -3,8 +3,10 @@ import {
   ACCOUNTS_EXPECTED_TOOLS,
   SHOP_CONTRACT_VERSION,
   SHOP_EXPECTED_TOOLS,
+  SUPPORT_CONTRACT_VERSION,
+  SUPPORT_EXPECTED_TOOLS,
   readOrigin,
-  type BuiltinWorkflowProviderId,
+  type BuiltinProviderId,
   type GatewayErrorCode,
   type TrustedProviderEntry,
 } from "@repo/contracts";
@@ -25,6 +27,8 @@ export type ProviderDirectoryEnv = {
   NEXT_PUBLIC_SHOP_ENTRY_URL?: string;
   NEXT_PUBLIC_ACCOUNTS_ORIGIN?: string;
   NEXT_PUBLIC_ACCOUNTS_ENTRY_URL?: string;
+  NEXT_PUBLIC_SUPPORT_ORIGIN?: string;
+  NEXT_PUBLIC_SUPPORT_ENTRY_URL?: string;
 };
 
 export type BuiltinProviderDefinition = TrustedProviderEntry & {
@@ -73,7 +77,7 @@ function loadTrustedEntry(
   env: ProviderDirectoryEnv,
   originKey: keyof ProviderDirectoryEnv,
   entryKey: keyof ProviderDirectoryEnv,
-  providerId: BuiltinWorkflowProviderId,
+  providerId: BuiltinProviderId,
   label: string,
   icon: string,
   contractVersion: string,
@@ -120,6 +124,16 @@ export function loadProviderDirectory(
         "/icons/customers-icon.webp",
         ACCOUNTS_CONTRACT_VERSION,
         ACCOUNTS_EXPECTED_TOOLS,
+      ),
+      loadTrustedEntry(
+        env,
+        "NEXT_PUBLIC_SUPPORT_ORIGIN",
+        "NEXT_PUBLIC_SUPPORT_ENTRY_URL",
+        "support",
+        "Cases",
+        "/icons/cases-icon.webp",
+        SUPPORT_CONTRACT_VERSION,
+        SUPPORT_EXPECTED_TOOLS,
       ),
     ],
   };

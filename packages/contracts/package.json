@@ -29,6 +29,10 @@
     "./customers": {
       "types": "./dist/customers.d.ts",
       "default": "./dist/customers.js"
+    },
+    "./cases": {
+      "types": "./dist/cases.d.ts",
+      "default": "./dist/cases.js"
     }
   },
   "files": [

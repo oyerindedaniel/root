@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { schemaFingerprint } from "@repo/contracts";
+import { MAX_PREPARED_WORKFLOW_STEPS, schemaFingerprint } from "@repo/contracts";
 
 import { prepareWorkflow, revalidatePreparedStep } from "./prepare";
 import { runtimeReducer } from "./reducer";
@@ -15,6 +15,7 @@ const account = {
 const origins = {
   shop: "http://localhost:3002",
   accounts: "http://localhost:3001",
+  support: "http://localhost:3003",
 };
 
 const fingerprint = schemaFingerprint({
@@ -23,7 +24,7 @@ const fingerprint = schemaFingerprint({
 });
 
 function readyProvider(
-  providerId: "shop" | "accounts",
+  providerId: "shop" | "accounts" | "support",
   toolName: string,
   namespacedName: string,
 ) {
@@ -167,7 +168,7 @@ describe("prepareWorkflow", () => {
     }
   });
 
-  it("rejects graphs longer than two steps", () => {
+  it("binds Customers, Catalog, and Cases without all documents live", () => {
     const prepared = prepareWorkflow({
       state: createInitialRuntimeState(account),
       workflowId: "wf_1",
@@ -184,15 +185,98 @@ describe("prepareWorkflow", () => {
           arguments: { query: "keyboard" },
         },
         {
-          providerId: "shop",
-          tool: "search_products",
-          arguments: { query: "mouse" },
+          providerId: "support",
+          tool: "search_cases",
+          arguments: { query: "hub" },
         },
       ],
+    });
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.steps.map((step) => step.namespacedName)).toEqual([
+        "accounts.search_customers",
+        "shop.search_products",
+        "support.search_cases",
+      ]);
+    }
+  });
+
+  it("binds more allowlisted reads than the allowlist length", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "search_customers",
+          arguments: { query: "ada" },
+        },
+        {
+          providerId: "accounts",
+          tool: "search_customers",
+          arguments: { query: "lin" },
+        },
+        {
+          providerId: "support",
+          tool: "search_cases",
+          arguments: { query: "hub" },
+        },
+        {
+          providerId: "shop",
+          tool: "search_products",
+          arguments: { query: "keyboard" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.steps.map((step) => step.namespacedName)).toEqual([
+        "accounts.search_customers",
+        "accounts.search_customers",
+        "support.search_cases",
+        "shop.search_products",
+      ]);
+    }
+  });
+
+  it("rejects graphs longer than the safety cap", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: Array.from(
+        { length: MAX_PREPARED_WORKFLOW_STEPS + 1 },
+        (_, index) => ({
+          providerId: "accounts" as const,
+          tool: "search_customers" as const,
+          arguments: { query: `q${index}` },
+        }),
+      ),
     });
     expect(prepared.ok).toBe(false);
     if (!prepared.ok) {
       expect(prepared.error.code).toBe("unsupported_graph");
+    }
+  });
+
+  it("binds a Cases search as a builtin read step", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "support",
+          tool: "search_cases",
+          arguments: { query: "hub" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.steps[0]?.namespacedName).toBe("support.search_cases");
+      expect(prepared.steps[0]?.origin).toBe(origins.support);
     }
   });
 

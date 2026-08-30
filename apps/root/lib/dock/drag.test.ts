@@ -7,7 +7,7 @@ import {
 } from "./drag";
 
 describe("Dock drag payload", () => {
-  it("round-trips provider and system references", () => {
+  it("round-trips provider references", () => {
     expect(
       parseDockReference(
         serializeDockReference({
@@ -18,9 +18,9 @@ describe("Dock drag payload", () => {
     ).toEqual({ kind: "provider", id: "custom-analytics-1" });
     expect(
       parseDockReference(
-        serializeDockReference({ kind: "system", id: "cases" }),
+        serializeDockReference({ kind: "provider", id: "support" }),
       ),
-    ).toEqual({ kind: "system", id: "cases" });
+    ).toEqual({ kind: "provider", id: "support" });
   });
 
   it("rejects malformed or authority-bearing drag payloads", () => {

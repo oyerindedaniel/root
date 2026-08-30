@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { searchCasesInputSchema, searchCasesOutputSchema } from "./cases.js";
 import { searchCustomersInputSchema, searchCustomersOutputSchema } from "./customers.js";
 import { searchProductsInputSchema, searchProductsOutputSchema } from "./shop.js";
 import {
@@ -44,20 +45,21 @@ export const providerPlacementSchema = z.enum(["stage", "tray"]);
 
 export type ProviderPlacement = z.infer<typeof providerPlacementSchema>;
 
-export const MAX_PREPARED_WORKFLOW_STEPS = 2;
+export const builtinProviderIdSchema = z.enum(["accounts", "shop", "support"]);
 
-export const builtinWorkflowProviderIdSchema = z.enum(["accounts", "shop"]);
+export type BuiltinProviderId = z.infer<typeof builtinProviderIdSchema>;
 
-export type BuiltinWorkflowProviderId = z.infer<
-  typeof builtinWorkflowProviderIdSchema
->;
-
-export const passReadToolNameSchema = z.enum([
+export const PASS_READ_TOOL_NAMES = [
   "accounts.search_customers",
   "shop.search_products",
-]);
+  "support.search_cases",
+] as const;
+
+export const passReadToolNameSchema = z.enum(PASS_READ_TOOL_NAMES);
 
 export type PassReadToolName = z.infer<typeof passReadToolNameSchema>;
+
+export const MAX_PREPARED_WORKFLOW_STEPS = 32;
 
 export const proposedCustomerSearchStepSchema = z.strictObject({
   providerId: z.literal("accounts"),
@@ -71,9 +73,16 @@ export const proposedProductSearchStepSchema = z.strictObject({
   arguments: searchProductsInputSchema,
 });
 
+export const proposedCaseSearchStepSchema = z.strictObject({
+  providerId: z.literal("support"),
+  tool: z.literal("search_cases"),
+  arguments: searchCasesInputSchema,
+});
+
 export const proposedWorkflowStepSchema = z.discriminatedUnion("tool", [
   proposedCustomerSearchStepSchema,
   proposedProductSearchStepSchema,
+  proposedCaseSearchStepSchema,
 ]);
 
 export type ProposedWorkflowStep = z.infer<typeof proposedWorkflowStepSchema>;
@@ -107,9 +116,23 @@ export const preparedProductSearchStepSchema = z.object({
   readOnly: z.literal(true),
 });
 
+export const preparedCaseSearchStepSchema = z.object({
+  providerId: z.literal("support"),
+  origin: originSchema,
+  toolName: z.literal("search_cases"),
+  namespacedName: z.literal("support.search_cases"),
+  schemaFingerprint: z.string().min(1).nullable(),
+  arguments: searchCasesInputSchema,
+  readOnly: z.literal(true),
+});
+
 export const preparedWorkflowStepSchema = z.discriminatedUnion(
   "namespacedName",
-  [preparedCustomerSearchStepSchema, preparedProductSearchStepSchema],
+  [
+    preparedCustomerSearchStepSchema,
+    preparedProductSearchStepSchema,
+    preparedCaseSearchStepSchema,
+  ],
 );
 
 export type PreparedWorkflowStep = z.infer<typeof preparedWorkflowStepSchema>;
@@ -135,9 +158,15 @@ export const productSearchResultSchema = z.object({
   data: searchProductsOutputSchema,
 });
 
+export const caseSearchResultSchema = z.object({
+  tool: z.literal("support.search_cases"),
+  data: searchCasesOutputSchema,
+});
+
 export const workflowStepResultSchema = z.discriminatedUnion("tool", [
   customerSearchResultSchema,
   productSearchResultSchema,
+  caseSearchResultSchema,
 ]);
 
 export type WorkflowStepResult = z.infer<typeof workflowStepResultSchema>;

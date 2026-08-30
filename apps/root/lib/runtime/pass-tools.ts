@@ -1,11 +1,15 @@
 import {
   namespacedToolName,
+  proposedCaseSearchStepSchema,
   proposedCustomerSearchStepSchema,
   proposedProductSearchStepSchema,
+  searchCasesInputSchema,
+  searchCasesOutputSchema,
   searchCustomersInputSchema,
   searchCustomersOutputSchema,
   searchProductsInputSchema,
   searchProductsOutputSchema,
+  type BuiltinProviderId,
   type PassReadToolName,
   type PreparedWorkflowStep,
   type ProposedWorkflowStep,
@@ -14,7 +18,7 @@ import {
 import type { z } from "zod";
 
 function definePassTool<
-  const TProvider extends "accounts" | "shop",
+  const TProvider extends BuiltinProviderId,
   const TTool extends string,
   TInputSchema extends z.ZodType,
   TOutputSchema extends z.ZodType,
@@ -89,6 +93,14 @@ export const PASS_READ_TOOLS = {
     outputSchema: searchCustomersOutputSchema,
     proposedSchema: proposedCustomerSearchStepSchema,
     evidence: (data) => `${data.customers.length} customers for "${data.query}"`,
+  }),
+  [namespacedToolName("support", "search_cases")]: definePassTool({
+    providerId: "support",
+    tool: "search_cases",
+    inputSchema: searchCasesInputSchema,
+    outputSchema: searchCasesOutputSchema,
+    proposedSchema: proposedCaseSearchStepSchema,
+    evidence: (data) => `${data.cases.length} cases for "${data.query}"`,
   }),
 } satisfies Record<PassReadToolName, unknown>;
 

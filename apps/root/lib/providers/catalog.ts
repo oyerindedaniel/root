@@ -19,13 +19,6 @@ import {
 
 export type ProviderDefinition = BuiltinProviderDefinition | CustomProvider;
 
-export type SystemApp = {
-  kind: "system";
-  id: "cases";
-  label: "Cases";
-  icon: "/icons/cases-icon.webp";
-};
-
 export type ProviderApp = {
   kind: "provider";
   id: ProviderId;
@@ -34,21 +27,11 @@ export type ProviderApp = {
   provider: ProviderDefinition;
 };
 
-export type InstalledApp = ProviderApp | SystemApp;
+export type InstalledApp = ProviderApp;
 
 export type ProviderCatalog = {
   providers: readonly ProviderDefinition[];
-  systemApps: readonly SystemApp[];
 };
-
-export const SYSTEM_APPS: readonly SystemApp[] = [
-  {
-    kind: "system",
-    id: "cases",
-    label: "Cases",
-    icon: "/icons/cases-icon.webp",
-  },
-];
 
 export function createProviderCatalog(
   directory: ProviderDirectory,
@@ -76,7 +59,7 @@ export function createProviderCatalog(
     origins.add(provider.origin);
     providers.push(provider);
   }
-  return { providers, systemApps: SYSTEM_APPS };
+  return { providers };
 }
 
 export function getProvider(
@@ -111,18 +94,15 @@ export function providerKey(provider: ProviderDefinition): ProviderId {
 }
 
 export function installedApps(catalog: ProviderCatalog): InstalledApp[] {
-  return [
-    ...catalog.providers.map(
-      (provider): ProviderApp => ({
-        kind: "provider",
-        id: providerKey(provider),
-        label: provider.label,
-        icon: provider.icon,
-        provider,
-      }),
-    ),
-    ...catalog.systemApps,
-  ];
+  return catalog.providers.map(
+    (provider): ProviderApp => ({
+      kind: "provider",
+      id: providerKey(provider),
+      label: provider.label,
+      icon: provider.icon,
+      provider,
+    }),
+  );
 }
 
 export function resolveDockApps(

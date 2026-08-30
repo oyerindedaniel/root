@@ -14,9 +14,9 @@ export const accountsRouter = createTrpcRouter({
   searchCustomers: publicProcedure
     .input(searchCustomersInputSchema)
     .output(searchCustomersOutputSchema)
-    .query(({ input }) => ({
+    .query(async ({ input }) => ({
       status: "success" as const,
       query: input.query,
-      customers: searchCustomers(input.query),
+      customers: await searchCustomers(input.query),
     })),
 });

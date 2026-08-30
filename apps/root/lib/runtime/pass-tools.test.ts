@@ -43,6 +43,9 @@ describe("PASS_READ_TOOLS", () => {
       namespacedToolName("shop", "search_products"),
     ).toEqualTypeOf<"shop.search_products">();
     expectTypeOf(
+      namespacedToolName("support", "search_cases"),
+    ).toEqualTypeOf<"support.search_cases">();
+    expectTypeOf(
       PASS_READ_TOOLS[namespacedToolName("accounts", "search_customers")]
         .namespacedName,
     ).toEqualTypeOf<"accounts.search_customers">();
@@ -164,5 +167,25 @@ describe("bindPassReadStep", () => {
         arguments: { query: "", extra: true },
       }),
     ).toBeNull();
+    expect(
+      bindPassReadStep({
+        providerId: "accounts",
+        tool: "search_cases",
+        arguments: { query: "hub" },
+      }),
+    ).toBeNull();
+  });
+
+  it("freezes a Cases search", () => {
+    const binding = bindPassReadStep({
+      providerId: "support",
+      tool: "search_cases",
+      arguments: { query: "hub" },
+    });
+    if (!binding) {
+      throw new Error("expected binding");
+    }
+    const step = binding.freeze("http://localhost:3003", null);
+    expect(step.namespacedName).toBe("support.search_cases");
   });
 });

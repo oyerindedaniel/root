@@ -8,6 +8,7 @@ import {
   inspectWorkflowInputSchema,
   invokeGrantedToolInputSchema,
   listProvidersInputSchema,
+  MAX_PREPARED_WORKFLOW_STEPS,
   parseToolExecuteInput,
   prepareWorkflowInputSchema,
   type BoundedError,
@@ -207,8 +208,7 @@ export async function registerGatewayTools(
     {
       name: "prepare_workflow",
       title: "Prepare workflow",
-      description:
-        "Prepare one or two sequential read-only search steps against trusted providers.",
+      description: `Prepare 1 to ${MAX_PREPARED_WORKFLOW_STEPS} sequential read-only search steps against trusted providers.`,
       inputSchema: {
         type: "object",
         properties: {
@@ -222,7 +222,7 @@ export async function registerGatewayTools(
         if (!parsed) {
           return boundedError(
             "invalid_arguments",
-            "prepare_workflow requires one or two allowlisted search steps.",
+            `prepare_workflow requires 1 to ${MAX_PREPARED_WORKFLOW_STEPS} allowlisted search steps.`,
           );
         }
         return handlersRef.current.prepareWorkflow(parsed);

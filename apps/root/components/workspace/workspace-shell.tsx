@@ -139,14 +139,9 @@ function WorkspaceDock() {
         }}
       >
         {apps.map((app, index) => {
-        const providerId = app.kind === "provider" ? app.id : null;
-        const reference: DockReference =
-          app.kind === "provider"
-            ? { kind: "provider", id: app.id }
-            : { kind: "system", id: app.id };
+        const reference: DockReference = { kind: "provider", id: app.id };
         const mounted =
-          Boolean(providerId) &&
-          state.provider.providerId === providerId &&
+          state.provider.providerId === app.id &&
           state.provider.lifecycle !== "unmounted";
         return (
           <Dock.Item
@@ -175,66 +170,97 @@ function WorkspaceDock() {
               }
             }}
           >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Dock.Trigger
-                  ref={mounted ? restoreButtonRef : undefined}
-                  aria-label={app.label}
-                  draggable
-                  onDragStartCapture={(event) => {
-                    writeDockReference(event.dataTransfer, reference);
-                    draggedRef.current = reference;
-                    dockBoundsRef.current =
-                      event.currentTarget.closest("nav")?.getBoundingClientRect() ??
-                      null;
-                    cancelledRef.current = false;
-                    removeCandidateRef.current = false;
-                  }}
-                  onDragCapture={(event) => {
-                    const bounds = dockBoundsRef.current;
-                    if (
-                      !bounds ||
-                      (event.clientX === 0 && event.clientY === 0)
-                    ) {
-                      return;
-                    }
-                    const outside = dockRemovalCandidate(
-                      bounds,
-                      { x: event.clientX, y: event.clientY },
-                      DOCK_ICON_SIZE * 1.5,
-                    );
-                    removeCandidateRef.current = outside;
-                    setRemoveCandidate(
-                      outside ? `${reference.kind}:${reference.id}` : null,
-                    );
-                  }}
-                  onDragEndCapture={finishDrag}
-                  onClick={
-                    providerId ? () => activateProvider(providerId) : undefined
+            <DockTooltip label={app.label}>
+              <Dock.Trigger
+                ref={mounted ? restoreButtonRef : undefined}
+                aria-label={app.label}
+                draggable
+                onDragStartCapture={(event) => {
+                  writeDockReference(event.dataTransfer, reference);
+                  draggedRef.current = reference;
+                  dockBoundsRef.current =
+                    event.currentTarget.closest("nav")?.getBoundingClientRect() ??
+                    null;
+                  cancelledRef.current = false;
+                  removeCandidateRef.current = false;
+                }}
+                onDragCapture={(event) => {
+                  const bounds = dockBoundsRef.current;
+                  if (
+                    !bounds ||
+                    (event.clientX === 0 && event.clientY === 0)
+                  ) {
+                    return;
                   }
-                >
-                  <img
-                    src={app.icon}
-                    alt=""
-                    width={DOCK_ICON_SIZE}
-                    height={DOCK_ICON_SIZE}
-                    className="pointer-events-none size-full select-none"
+                  const outside = dockRemovalCandidate(
+                    bounds,
+                    { x: event.clientX, y: event.clientY },
+                    DOCK_ICON_SIZE * 1.5,
+                  );
+                  removeCandidateRef.current = outside;
+                  setRemoveCandidate(
+                    outside ? `${reference.kind}:${reference.id}` : null,
+                  );
+                }}
+                onDragEndCapture={finishDrag}
+                onClick={() => activateProvider(app.id)}
+              >
+                <img
+                  src={app.icon}
+                  alt=""
+                  width={DOCK_ICON_SIZE}
+                  height={DOCK_ICON_SIZE}
+                  className="pointer-events-none size-full select-none"
+                />
+                {mounted ? (
+                  <span
+                    ref={traySlotRef}
+                    className="pointer-events-none absolute inset-0 overflow-hidden rounded-[22%]"
                   />
-                  {mounted ? (
-                    <span
-                      ref={traySlotRef}
-                      className="pointer-events-none absolute inset-0 overflow-hidden rounded-[22%]"
-                    />
-                  ) : null}
-                </Dock.Trigger>
-              </TooltipTrigger>
-              <TooltipContent>{app.label}</TooltipContent>
-            </Tooltip>
+                ) : null}
+              </Dock.Trigger>
+            </DockTooltip>
             {mounted ? <Dock.Running /> : null}
           </Dock.Item>
         );
         })}
       </Dock.Root>
     </>
+  );
+}
+
+function DockTooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactElement;
+}) {
+  const [open, setOpen] = useState(false);
+  const pointerOnTrigger = useRef(false);
+
+  return (
+    <Tooltip
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && pointerOnTrigger.current) {
+          return;
+        }
+        setOpen(next);
+      }}
+    >
+      <TooltipTrigger
+        asChild
+        onPointerEnter={() => {
+          pointerOnTrigger.current = true;
+        }}
+        onPointerLeave={() => {
+          pointerOnTrigger.current = false;
+        }}
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }

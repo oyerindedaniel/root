@@ -396,6 +396,7 @@ export function RuntimeProvider({
       origins: {
         shop: getBuiltinProvider(directory, "shop").origin,
         accounts: getBuiltinProvider(directory, "accounts").origin,
+        support: getBuiltinProvider(directory, "support").origin,
       },
     });
     if (!prepared.ok) {

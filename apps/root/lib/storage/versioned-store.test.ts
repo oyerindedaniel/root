@@ -81,6 +81,26 @@ describe("createVersionedStore", () => {
     expect(preferences.getSnapshot().hydrated).toBe(true);
   });
 
+  it("treats a leftover Cases system pin as corrupt storage", () => {
+    const storage = new MemoryStorage();
+    const preferences = store(storage, "account-cases");
+    storage.setItem(
+      preferences.key,
+      JSON.stringify({
+        version: 1,
+        customProviders: [],
+        dock: [
+          { kind: "provider", id: "accounts" },
+          { kind: "system", id: "cases" },
+        ],
+      }),
+    );
+    expect(preferences.getSnapshot().failure).toBe("corrupt");
+    expect(preferences.getSnapshot().value.dock).toEqual(
+      createDefaultWorkspacePreferences().dock,
+    );
+  });
+
   it("defaults old custom provider grants and rejects duplicates", () => {
     const oldProvider = {
       id: "custom-provider-1",

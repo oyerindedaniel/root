@@ -27,6 +27,8 @@ const directory = loadProviderDirectory({
   NEXT_PUBLIC_SHOP_ENTRY_URL: "http://localhost:3002/",
   NEXT_PUBLIC_ACCOUNTS_ORIGIN: "http://localhost:3001",
   NEXT_PUBLIC_ACCOUNTS_ENTRY_URL: "http://localhost:3001/",
+  NEXT_PUBLIC_SUPPORT_ORIGIN: "http://localhost:3003",
+  NEXT_PUBLIC_SUPPORT_ENTRY_URL: "http://localhost:3003/",
 });
 
 function custom(overrides: Partial<CustomProvider> = {}): CustomProvider {
@@ -44,6 +46,24 @@ function custom(overrides: Partial<CustomProvider> = {}): CustomProvider {
 }
 
 describe("provider catalog", () => {
+  it("installs Catalog, Customers, and Cases from the directory", () => {
+    const catalog = createProviderCatalog(
+      directory,
+      createDefaultWorkspacePreferences(),
+      true,
+    );
+    expect(installedApps(catalog).map((app) => app.id)).toEqual([
+      "shop",
+      "accounts",
+      "support",
+    ]);
+    expect(installedApps(catalog).map((app) => app.label)).toEqual([
+      "Catalog",
+      "Customers",
+      "Cases",
+    ]);
+  });
+
   it("keeps built-ins installed when they are unpinned", () => {
     const defaults = createDefaultWorkspacePreferences();
     const unpinned = unpinDockApp(defaults, {
@@ -54,13 +74,13 @@ describe("provider catalog", () => {
     expect(getProvider(catalog, "shop").source).toBe("builtin");
     expect(resolveDockApps(catalog, unpinned.dock).map((app) => app.id)).toEqual([
       "accounts",
-      "cases",
+      "support",
     ]);
     const restored = pinDockApp(unpinned, { kind: "provider", id: "shop" }, 1);
     expect(restored.dock.map((entry) => entry.id)).toEqual([
       "accounts",
       "shop",
-      "cases",
+      "support",
     ]);
   });
 
@@ -237,7 +257,7 @@ describe("provider catalog", () => {
     expect(moved.dock.map((entry) => entry.id)).toEqual([
       "shop",
       "accounts",
-      "cases",
+      "support",
     ]);
     const unpinned = unpinDockApp(moved, {
       kind: "provider",
@@ -246,11 +266,11 @@ describe("provider catalog", () => {
     const catalog = createProviderCatalog(directory, unpinned);
     expect(
       resolveDockApps(catalog, unpinned.dock, "shop").map((app) => app.id),
-    ).toEqual(["accounts", "cases", "shop"]);
+    ).toEqual(["accounts", "support", "shop"]);
     expect(createDefaultWorkspacePreferences().dock.map((entry) => entry.id)).toEqual([
       "accounts",
       "shop",
-      "cases",
+      "support",
     ]);
   });
 });

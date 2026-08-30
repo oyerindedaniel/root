@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type { Customer } from "../src/customers.js";
+import type { SupportCase } from "../src/cases.js";
 import type { ShopProduct } from "../src/shop.js";
 import {
   boundedError,
@@ -12,7 +13,9 @@ import {
   invokeGrantedToolInputSchema,
   invokeGrantedToolOutputSchema,
   listProvidersOutputSchema,
+  MAX_PREPARED_WORKFLOW_STEPS,
   MAX_PROVIDER_TOOLS,
+  PASS_READ_TOOL_NAMES,
   prepareWorkflowInputSchema,
   prepareWorkflowOutputSchema,
   proposedWorkflowStepSchema,
@@ -47,8 +50,71 @@ const productResult = {
   },
 };
 
+const caseResult = {
+  tool: "support.search_cases" as const,
+  data: {
+    status: "success" as const,
+    query: "hub",
+    cases: [
+      {
+        id: "case-1",
+        title: "USB-C hub not detected",
+        customerName: "Ada",
+        customerEmail: "ada@localhost",
+        orderRef: "usb-hub",
+        status: "open" as const,
+      },
+    ],
+  },
+};
+
+function customerSearch(query: string) {
+  return {
+    providerId: "accounts" as const,
+    tool: "search_customers" as const,
+    arguments: { query },
+  };
+}
+
 describe("proposed workflow steps", () => {
-  it("accepts allowlisted customer and product searches", () => {
+  it("keeps the step cap independent of the pass allowlist", () => {
+    expect(MAX_PREPARED_WORKFLOW_STEPS).not.toBe(PASS_READ_TOOL_NAMES.length);
+    expect(MAX_PREPARED_WORKFLOW_STEPS).not.toBe(MAX_PROVIDER_TOOLS);
+  });
+
+  it("accepts more allowlisted reads than the allowlist length", () => {
+    expect(
+      prepareWorkflowInputSchema.safeParse({
+        steps: [
+          customerSearch("ada"),
+          customerSearch("lin"),
+          {
+            providerId: "support",
+            tool: "search_cases",
+            arguments: { query: "hub" },
+          },
+          {
+            providerId: "shop",
+            tool: "search_products",
+            arguments: { query: "keyboard" },
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects graphs longer than the safety cap", () => {
+    expect(
+      prepareWorkflowInputSchema.safeParse({
+        steps: Array.from(
+          { length: MAX_PREPARED_WORKFLOW_STEPS + 1 },
+          (_, index) => customerSearch(`q${index}`),
+        ),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts allowlisted customer, product, and case searches", () => {
     expect(
       proposedWorkflowStepSchema.safeParse({
         providerId: "accounts",
@@ -63,6 +129,13 @@ describe("proposed workflow steps", () => {
         arguments: { query: "keyboard" },
       }).success,
     ).toBe(true);
+    expect(
+      proposedWorkflowStepSchema.safeParse({
+        providerId: "support",
+        tool: "search_cases",
+        arguments: { query: "hub" },
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects a mismatched provider and tool", () => {
@@ -71,6 +144,13 @@ describe("proposed workflow steps", () => {
         providerId: "shop",
         tool: "search_customers",
         arguments: { query: "ada" },
+      }).success,
+    ).toBe(false);
+    expect(
+      proposedWorkflowStepSchema.safeParse({
+        providerId: "accounts",
+        tool: "search_cases",
+        arguments: { query: "hub" },
       }).success,
     ).toBe(false);
   });
@@ -308,7 +388,7 @@ describe("gateway envelopes", () => {
     ).toBe(true);
     expect(
       executeWorkflowOutputSchema.safeParse({
-        results: [customerResult, productResult],
+        results: [customerResult, productResult, caseResult],
       }).success,
     ).toBe(true);
   });
@@ -354,6 +434,8 @@ describe("gateway envelopes", () => {
     );
     if (result.tool === "shop.search_products") {
       expectTypeOf(result.data.products).toEqualTypeOf<ShopProduct[]>();
+    } else if (result.tool === "support.search_cases") {
+      expectTypeOf(result.data.cases).toEqualTypeOf<SupportCase[]>();
     } else {
       expectTypeOf(result.data.customers).toEqualTypeOf<Customer[]>();
     }

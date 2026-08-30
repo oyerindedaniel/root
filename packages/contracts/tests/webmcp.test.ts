@@ -11,6 +11,7 @@ import {
   toolHandleKey,
 } from "../src/webmcp.js";
 import { searchProductsInputSchema } from "../src/shop.js";
+import { searchCasesInputSchema } from "../src/cases.js";
 
 describe("input schema normalization", () => {
   it("keeps object schemas as object invoke kind", () => {
@@ -66,6 +67,9 @@ describe("fingerprints and namespacing", () => {
     expect(namespacedToolName("accounts", "search_customers")).toBe(
       "accounts.search_customers",
     );
+    expect(namespacedToolName("support", "search_cases")).toBe(
+      "support.search_cases",
+    );
     expectTypeOf(namespacedToolName("shop", "search_products")).toEqualTypeOf<
       "shop.search_products"
     >();
@@ -83,6 +87,7 @@ describe("bounded errors and shop input", () => {
     expect(searchProductsInputSchema.safeParse({ query: "" }).success).toBe(
       false,
     );
+    expect(searchCasesInputSchema.safeParse({ query: "" }).success).toBe(false);
   });
 
   it("builds a bounded error envelope", () => {

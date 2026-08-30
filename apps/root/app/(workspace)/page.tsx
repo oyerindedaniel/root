@@ -10,6 +10,8 @@ export default async function WorkspacePage() {
     NEXT_PUBLIC_SHOP_ENTRY_URL: process.env.NEXT_PUBLIC_SHOP_ENTRY_URL,
     NEXT_PUBLIC_ACCOUNTS_ORIGIN: process.env.NEXT_PUBLIC_ACCOUNTS_ORIGIN,
     NEXT_PUBLIC_ACCOUNTS_ENTRY_URL: process.env.NEXT_PUBLIC_ACCOUNTS_ENTRY_URL,
+    NEXT_PUBLIC_SUPPORT_ORIGIN: process.env.NEXT_PUBLIC_SUPPORT_ORIGIN,
+    NEXT_PUBLIC_SUPPORT_ENTRY_URL: process.env.NEXT_PUBLIC_SUPPORT_ENTRY_URL,
   });
 
   return <WorkspaceShell account={account} directory={directory} />;

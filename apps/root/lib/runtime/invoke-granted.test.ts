@@ -30,6 +30,8 @@ const directory = loadProviderDirectory({
   NEXT_PUBLIC_SHOP_ENTRY_URL: "http://localhost:3002/",
   NEXT_PUBLIC_ACCOUNTS_ORIGIN: "http://localhost:3001",
   NEXT_PUBLIC_ACCOUNTS_ENTRY_URL: "http://localhost:3001/",
+  NEXT_PUBLIC_SUPPORT_ORIGIN: "http://localhost:3003",
+  NEXT_PUBLIC_SUPPORT_ENTRY_URL: "http://localhost:3003/",
 });
 const provider: CustomProvider = {
   id: "custom-provider-1",

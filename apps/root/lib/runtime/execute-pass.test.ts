@@ -164,12 +164,10 @@ function createHarness(steps: PreparedWorkflowStep[]) {
     getState: () => state,
     dispatch,
     discover,
-    getHandle: (_instanceId, _origin, toolName) =>
-      handles.get(
-        toolName === "search_products"
-          ? "shop.search_products"
-          : "accounts.search_customers",
-      ),
+    getHandle: (_instanceId, _origin, toolName) => {
+      const step = steps.find((candidate) => candidate.toolName === toolName);
+      return step ? handles.get(step.namespacedName) : undefined;
+    },
     getModelContext: () => modelContext,
     executeTool,
   };

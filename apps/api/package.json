@@ -13,7 +13,8 @@
     "start": "tsx src/index.ts",
     "lint": "eslint src/ --max-warnings 0",
     "check-types": "tsc --noEmit",
-    "db:seed": "tsx src/scripts/seed-auth.ts"
+    "db:seed": "tsx src/scripts/seed-auth.ts",
+    "db:seed:providers": "tsx src/scripts/seed-providers.ts"
   },
   "dependencies": {
     "@repo/auth": "workspace:*",
@@ -22,6 +23,7 @@
     "@trpc/server": "11.18.0",
     "better-auth": "1.6.26",
     "cors": "2.8.6",
+    "drizzle-orm": "0.45.2",
     "express": "5.2.1",
     "helmet": "8.3.0",
     "postgres": "3.4.9",

@@ -10,6 +10,10 @@ const accountsOrigin = requirePublicEnv(
   "NEXT_PUBLIC_ACCOUNTS_ORIGIN",
   process.env.NEXT_PUBLIC_ACCOUNTS_ORIGIN,
 );
+const supportOrigin = requirePublicEnv(
+  "NEXT_PUBLIC_SUPPORT_ORIGIN",
+  process.env.NEXT_PUBLIC_SUPPORT_ORIGIN,
+);
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@repo/ui", "@repo/api-client"],
@@ -28,7 +32,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "Permissions-Policy",
-            value: `tools=(self "${shopOrigin}" "${accountsOrigin}")`,
+            value: `tools=(self "${shopOrigin}" "${accountsOrigin}" "${supportOrigin}")`,
           },
         ],
       },

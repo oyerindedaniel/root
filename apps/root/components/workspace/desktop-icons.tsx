@@ -39,18 +39,14 @@ export function DesktopIcons() {
       }}
     >
       {apps.map((app) => {
-        const providerId = app.kind === "provider" ? app.id : null;
-        const reference: DockReference =
-          app.kind === "provider"
-            ? { kind: "provider", id: app.id }
-            : { kind: "system", id: app.id };
+        const reference: DockReference = { kind: "provider", id: app.id };
         return (
           <DesktopAlias
             key={`${app.kind}:${app.id}`}
             src={app.icon}
             name={app.label}
             reference={reference}
-            onOpen={providerId ? () => activateProvider(providerId) : undefined}
+            onOpen={() => activateProvider(app.id)}
           />
         );
       })}

@@ -40,20 +40,10 @@ export const customProviderSchema = z
 
 export type CustomProvider = z.infer<typeof customProviderSchema>;
 
-export const providerDockReferenceSchema = z.strictObject({
+export const dockReferenceSchema = z.strictObject({
   kind: z.literal("provider"),
   id: z.string().min(1).max(64),
 });
-
-export const systemDockReferenceSchema = z.strictObject({
-  kind: z.literal("system"),
-  id: z.literal("cases"),
-});
-
-export const dockReferenceSchema = z.discriminatedUnion("kind", [
-  providerDockReferenceSchema,
-  systemDockReferenceSchema,
-]);
 
 export type DockReference = z.infer<typeof dockReferenceSchema>;
 
@@ -107,7 +97,7 @@ export type WorkspacePreferences = z.infer<typeof workspacePreferencesSchema>;
 export const DEFAULT_DOCK: readonly DockReference[] = [
   { kind: "provider", id: "accounts" },
   { kind: "provider", id: "shop" },
-  { kind: "system", id: "cases" },
+  { kind: "provider", id: "support" },
 ];
 
 export function createDefaultWorkspacePreferences(): WorkspacePreferences {

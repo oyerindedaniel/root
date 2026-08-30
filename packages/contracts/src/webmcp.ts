@@ -146,6 +146,10 @@ export const ACCOUNTS_EXPECTED_TOOLS = ["search_customers"] as const;
 
 export const ACCOUNTS_CONTRACT_VERSION = "1.0.0" satisfies ContractVersion;
 
+export const SUPPORT_EXPECTED_TOOLS = ["search_cases"] as const;
+
+export const SUPPORT_CONTRACT_VERSION = "1.0.0" satisfies ContractVersion;
+
 export const WEBMCP_DISCOVERY_TIMEOUT_MS = 8_000;
 
 export const WEBMCP_DISCOVERY_POLL_MS = 200;
