@@ -1,4 +1,9 @@
-import { readOrigin, type ProviderId } from "@repo/contracts";
+import {
+  MAX_PROVIDER_TOOLS,
+  readOrigin,
+  webmcpToolNameSchema,
+  type ProviderId,
+} from "@repo/contracts";
 
 import {
   DirectoryError,
@@ -180,8 +185,21 @@ export function updateCustomProvider(
   if (index < 0) {
     throw new DirectoryError("unknown_provider", "Custom provider not found.");
   }
+  const current = preferences.customProviders[index];
+  if (!current) {
+    throw new DirectoryError("unknown_provider", "Custom provider not found.");
+  }
+  const validated = validateCustomProvider(provider, allowLocalHttp);
+  const updated = {
+    ...validated,
+    grantedTools:
+      current.origin === validated.origin &&
+      current.entryUrl === validated.entryUrl
+        ? current.grantedTools
+        : [],
+  };
   const customProviders = preferences.customProviders.map((entry) =>
-    entry.id === provider.id ? provider : entry,
+    entry.id === provider.id ? updated : entry,
   );
   createProviderCatalog(
     { rootOrigin: "http://localhost", builtins },
@@ -189,6 +207,33 @@ export function updateCustomProvider(
     allowLocalHttp,
   );
   return { ...preferences, customProviders };
+}
+
+export function setCustomProviderGrantedTools(
+  preferences: WorkspacePreferences,
+  providerId: string,
+  grantedTools: readonly string[],
+): WorkspacePreferences {
+  const provider = preferences.customProviders.find(
+    (entry) => entry.id === providerId,
+  );
+  if (!provider) {
+    throw new DirectoryError("unknown_provider", "Custom provider not found.");
+  }
+  const unique = [...new Set(grantedTools)];
+  if (
+    unique.length !== grantedTools.length ||
+    unique.length > MAX_PROVIDER_TOOLS ||
+    unique.some((name) => !webmcpToolNameSchema.safeParse(name).success)
+  ) {
+    throw new Error("invalid_granted_tools");
+  }
+  return {
+    ...preferences,
+    customProviders: preferences.customProviders.map((entry) =>
+      entry.id === providerId ? { ...entry, grantedTools: unique } : entry,
+    ),
+  };
 }
 
 export function deleteCustomProvider(

@@ -16,11 +16,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup() {
+function setup(registrationSignals: Array<AbortSignal | undefined> = []) {
   const tools: ModelContextTool[] = [];
   const context = Object.assign(new EventTarget(), {
-    registerTool: async (tool: ModelContextTool) => {
+    registerTool: async (
+      tool: ModelContextTool,
+      options?: { signal?: AbortSignal },
+    ) => {
       tools.push(tool);
+      registrationSignals.push(options?.signal);
     },
     getTools: async () => [],
     executeTool: async () => undefined,
@@ -39,6 +43,7 @@ function handlers(): GatewayHandlers {
             label: "Analytics",
             source: "custom",
             capability: "discovery-only",
+            grantedTools: [],
           },
         ],
       }),
@@ -48,6 +53,13 @@ function handlers(): GatewayHandlers {
         origin: "https://analytics.example",
         contractVersion: null,
         tools: [],
+      }),
+    invokeGrantedTool: async (input) =>
+      boundedSuccess({
+        providerId: input.providerId,
+        tool: input.tool,
+        untrusted: true,
+        data: {},
       }),
     prepareWorkflow: () =>
       boundedError("unsupported_graph", "Not used in this test."),
@@ -61,6 +73,27 @@ function handlers(): GatewayHandlers {
 }
 
 describe("registerGatewayTools", () => {
+  it("registers all seven gateway tools with the registrar signal", async () => {
+    const registrationSignals: Array<AbortSignal | undefined> = [];
+    const tools = setup(registrationSignals);
+    const controller = new AbortController();
+
+    await registerGatewayTools(controller.signal, { current: handlers() });
+
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "list_providers",
+      "discover_capabilities",
+      "invoke_granted_tool",
+      "prepare_workflow",
+      "execute_workflow",
+      "cancel_workflow",
+      "inspect_workflow",
+    ]);
+    expect(registrationSignals).toEqual(
+      Array.from({ length: 7 }, () => controller.signal),
+    );
+  });
+
   it("registers list_providers as a read-only catalog tool", async () => {
     const tools = setup();
     await registerGatewayTools(new AbortController().signal, {
@@ -81,6 +114,7 @@ describe("registerGatewayTools", () => {
             label: "Analytics",
             source: "custom",
             capability: "discovery-only",
+            grantedTools: [],
           },
         ],
       },
@@ -107,5 +141,201 @@ describe("registerGatewayTools", () => {
       { providerId: "custom-analytics-1" },
       expect.any(AbortSignal),
     );
+  });
+
+  it("routes invoke, prepare, execute, cancel, and inspect inputs", async () => {
+    const tools = setup();
+    const gatewayHandlers = handlers();
+    gatewayHandlers.prepareWorkflow = vi.fn(
+      gatewayHandlers.prepareWorkflow,
+    );
+    gatewayHandlers.executeWorkflow = vi.fn(
+      gatewayHandlers.executeWorkflow,
+    );
+    gatewayHandlers.cancelWorkflow = vi.fn(gatewayHandlers.cancelWorkflow);
+    gatewayHandlers.inspectWorkflow = vi.fn(gatewayHandlers.inspectWorkflow);
+    gatewayHandlers.invokeGrantedTool = vi.fn(
+      gatewayHandlers.invokeGrantedTool,
+    );
+    await registerGatewayTools(new AbortController().signal, {
+      current: gatewayHandlers,
+    });
+    const operationSignal = new AbortController().signal;
+
+    await tools
+      .find((tool) => tool.name === "invoke_granted_tool")
+      ?.execute(
+        {
+          providerId: "custom-analytics-1",
+          tool: "read_report",
+          arguments: { query: "ada" },
+        },
+        { signal: operationSignal },
+      );
+    await tools
+      .find((tool) => tool.name === "prepare_workflow")
+      ?.execute(
+        {
+          steps: [
+            {
+              providerId: "shop",
+              tool: "search_products",
+              arguments: { query: "keyboard" },
+            },
+          ],
+        },
+        { signal: operationSignal },
+      );
+    await tools
+      .find((tool) => tool.name === "execute_workflow")
+      ?.execute({ workflowId: "wf_1" }, { signal: operationSignal });
+    await tools
+      .find((tool) => tool.name === "cancel_workflow")
+      ?.execute({ workflowId: "wf_1" }, { signal: operationSignal });
+    await tools
+      .find((tool) => tool.name === "inspect_workflow")
+      ?.execute({ workflowId: "wf_1" }, { signal: operationSignal });
+
+    expect(gatewayHandlers.prepareWorkflow).toHaveBeenCalledWith({
+      steps: [
+        {
+          providerId: "shop",
+          tool: "search_products",
+          arguments: { query: "keyboard" },
+        },
+      ],
+    });
+    expect(gatewayHandlers.invokeGrantedTool).toHaveBeenCalledWith(
+      {
+        providerId: "custom-analytics-1",
+        tool: "read_report",
+        arguments: { query: "ada" },
+      },
+      operationSignal,
+    );
+    expect(gatewayHandlers.executeWorkflow).toHaveBeenCalledWith(
+      { workflowId: "wf_1" },
+      operationSignal,
+    );
+    expect(gatewayHandlers.cancelWorkflow).toHaveBeenCalledWith({
+      workflowId: "wf_1",
+    });
+    expect(gatewayHandlers.inspectWorkflow).toHaveBeenCalledWith({
+      workflowId: "wf_1",
+    });
+  });
+
+  it.each([
+    ["list_providers", { extra: true }],
+    ["discover_capabilities", { providerId: "shop", extra: true }],
+    [
+      "invoke_granted_tool",
+      {
+        providerId: "custom-analytics-1",
+        tool: "read_report",
+        arguments: {},
+        origin: "https://analytics.example",
+      },
+    ],
+    [
+      "prepare_workflow",
+      {
+        steps: [
+          {
+            providerId: "shop",
+            tool: "search_products",
+            arguments: { query: "keyboard" },
+          },
+        ],
+        extra: true,
+      },
+    ],
+    ["execute_workflow", { workflowId: "wf_1", extra: true }],
+    ["cancel_workflow", { workflowId: "wf_1", extra: true }],
+    ["inspect_workflow", { workflowId: "wf_1", extra: true }],
+  ])("rejects unknown ingress keys for %s", async (name, input) => {
+    const tools = setup();
+    await registerGatewayTools(new AbortController().signal, {
+      current: handlers(),
+    });
+
+    const result = await tools
+      .find((tool) => tool.name === name)
+      ?.execute(input, { signal: new AbortController().signal });
+
+    expect(result).toMatchObject({
+      status: "error",
+      code: "invalid_arguments",
+    });
+  });
+
+  it.each([
+    "list_providers",
+    "discover_capabilities",
+    "invoke_granted_tool",
+    "prepare_workflow",
+    "execute_workflow",
+    "cancel_workflow",
+    "inspect_workflow",
+  ])("bounds malformed JSON ingress for %s", async (name) => {
+    const tools = setup();
+    await registerGatewayTools(new AbortController().signal, {
+      current: handlers(),
+    });
+
+    const result = await tools
+      .find((tool) => tool.name === name)
+      ?.execute("{", { signal: new AbortController().signal });
+
+    expect(result).toMatchObject({
+      status: "error",
+      code: "invalid_arguments",
+    });
+  });
+
+  it("bounds invoke input before strict ingress parsing", async () => {
+    const tools = setup();
+    await registerGatewayTools(new AbortController().signal, {
+      current: handlers(),
+    });
+    const result = await tools
+      .find((tool) => tool.name === "invoke_granted_tool")
+      ?.execute("x".repeat(17_000), {
+        signal: new AbortController().signal,
+      });
+    expect(result).toMatchObject({
+      status: "error",
+      code: "input_too_large",
+    });
+  });
+
+  it("rejects structurally oversized invoke input without calling the handler", async () => {
+    const tools = setup();
+    const gatewayHandlers = handlers();
+    gatewayHandlers.invokeGrantedTool = vi.fn(
+      gatewayHandlers.invokeGrantedTool,
+    );
+    await registerGatewayTools(new AbortController().signal, {
+      current: gatewayHandlers,
+    });
+    let nested: Record<string, unknown> = {};
+    for (let depth = 0; depth < 30; depth += 1) {
+      nested = { value: nested };
+    }
+    const result = await tools
+      .find((tool) => tool.name === "invoke_granted_tool")
+      ?.execute(
+        {
+          providerId: "custom-analytics-1",
+          tool: "read_report",
+          arguments: nested,
+        },
+        { signal: new AbortController().signal },
+      );
+    expect(result).toMatchObject({
+      status: "error",
+      code: "input_too_large",
+    });
+    expect(gatewayHandlers.invokeGrantedTool).not.toHaveBeenCalled();
   });
 });

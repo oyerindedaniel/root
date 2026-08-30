@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_PROVIDER_TOOLS, webmcpToolNameSchema } from "@repo/contracts";
 
 export const MAX_CUSTOM_PROVIDERS = 24;
 export const MAX_DOCK_APPS = 32;
@@ -13,15 +14,29 @@ export const customProviderIconSchema = z
   .startsWith("data:image/webp;base64,")
   .max(MAX_ICON_DATA_URL_CHARS);
 
-export const customProviderSchema = z.strictObject({
-  id: customProviderIdSchema,
-  label: z.string().trim().min(1).max(80),
-  origin: z.url(),
-  entryUrl: z.url(),
-  icon: customProviderIconSchema,
-  source: z.literal("custom"),
-  capability: z.literal("discovery-only"),
-});
+export const customProviderSchema = z
+  .strictObject({
+    id: customProviderIdSchema,
+    label: z.string().trim().min(1).max(80),
+    origin: z.url(),
+    entryUrl: z.url(),
+    icon: customProviderIconSchema,
+    source: z.literal("custom"),
+    capability: z.literal("discovery-only"),
+    grantedTools: z
+      .array(webmcpToolNameSchema)
+      .max(MAX_PROVIDER_TOOLS)
+      .default([]),
+  })
+  .superRefine((provider, context) => {
+    if (new Set(provider.grantedTools).size !== provider.grantedTools.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Granted tool names must be unique.",
+        path: ["grantedTools"],
+      });
+    }
+  });
 
 export type CustomProvider = z.infer<typeof customProviderSchema>;
 

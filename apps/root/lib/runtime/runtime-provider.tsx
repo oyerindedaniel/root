@@ -3,8 +3,6 @@
 import {
   boundedError,
   boundedSuccess,
-  parseBoundedJsonResult,
-  parseExecuteResultText,
   type Account,
   type BoundedError,
   type BoundedResultEnvelope,
@@ -16,10 +14,11 @@ import {
   type ExecuteWorkflowOutput,
   type InspectWorkflowInput,
   type InspectWorkflowOutput,
+  type InvokeGrantedToolInput,
+  type InvokeGrantedToolOutput,
   type ListProvidersOutput,
   type PrepareWorkflowInput,
   type PrepareWorkflowOutput,
-  type WorkflowStepResult,
 } from "@repo/contracts";
 import {
   useCallback,
@@ -27,6 +26,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   type PropsWithChildren,
   type RefObject,
 } from "react";
@@ -45,9 +45,12 @@ import {
   type ProviderCatalog,
 } from "@/lib/providers/catalog";
 import { useProviderLibrary } from "@/lib/providers/provider-library";
+import { executePass } from "@/lib/runtime/execute-pass";
 import { GatewayRegistrar } from "@/lib/runtime/gateway-registrar";
-import { parsePassToolResult } from "@/lib/runtime/pass-tools";
-import { prepareWorkflow as bindWorkflow, revalidatePreparedStep } from "@/lib/runtime/prepare";
+import { invokeGrantedTool as runGrantedTool } from "@/lib/runtime/invoke-granted";
+import { isCancellation } from "@/lib/runtime/cancellation";
+import { acquireOperationLease } from "@/lib/runtime/operation-lease";
+import { prepareWorkflow as bindWorkflow } from "@/lib/runtime/prepare";
 import { runtimeReducer } from "@/lib/runtime/reducer";
 import {
   RuntimeContextProvider,
@@ -60,9 +63,9 @@ import {
 } from "@/lib/runtime/state";
 import { useIsomorphicLayoutEffect } from "@/lib/use-isomorphic-layout-effect";
 import { discoverTools } from "@/lib/webmcp/discover";
-import { executeRegisteredTool } from "@/lib/webmcp/execute";
 import { ToolHandleRegistry } from "@/lib/webmcp/handles";
 import {
+  assertProviderToolCapacity,
   normalizeDiscoveredTool,
   rejectDuplicateToolNames,
 } from "@/lib/webmcp/normalize";
@@ -95,6 +98,7 @@ export function RuntimeProvider({
 
   const handlesRef = useRef(new ToolHandleRegistry());
   const executionAbortRef = useRef<AbortController | null>(null);
+  const agentOperationRef = useRef(false);
   const motionAbortRef = useRef<AbortController | null>(null);
   const loadWaiterRef = useRef<LoadWaiter | null>(null);
 
@@ -104,7 +108,7 @@ export function RuntimeProvider({
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const restoreButtonRef = useRef<HTMLButtonElement | null>(null);
-  const windowSessionRef = useRef(createWindowSession());
+  const [windowSession] = useState(createWindowSession);
   const layoutRafRef = useRef(0);
 
   const waitForLoad = useCallback((instanceId: string) => {
@@ -135,9 +139,10 @@ export function RuntimeProvider({
   }, []);
 
   const openProvider = useCallback(
-    (providerId: string) => {
+    (providerId: string, forceRemount = false) => {
       const current = stateRef.current;
       if (
+        !forceRemount &&
         current.provider.instanceId &&
         current.provider.providerId === providerId
       ) {
@@ -145,7 +150,7 @@ export function RuntimeProvider({
       }
       if (current.provider.instanceId) {
         motionAbortRef.current?.abort();
-        windowSessionRef.current.unbind();
+        windowSession.unbind();
         handlesRef.current.invalidateInstance(current.provider.instanceId);
       }
       const entry = getProvider(catalog, providerId);
@@ -160,36 +165,41 @@ export function RuntimeProvider({
       });
       return instanceId;
     },
-    [catalog],
+    [catalog, windowSession],
   );
 
-  const closeProvider = useCallback(() => {
+  const unmountProvider = useCallback(() => {
     motionAbortRef.current?.abort();
-    windowSessionRef.current.unbind();
+    windowSession.unbind();
     const instanceId = stateRef.current.provider.instanceId;
     if (instanceId) {
       handlesRef.current.invalidateInstance(instanceId);
       dispatch({ type: "handles/invalidate", instanceId });
     }
     dispatch({ type: "provider/unmount" });
-  }, []);
+  }, [windowSession]);
+
+  const closeProvider = useCallback(() => {
+    unmountProvider();
+  }, [unmountProvider]);
 
   useEffect(() => {
     const providerId = state.provider.providerId;
     if (providerId && !hasProvider(catalog, providerId)) {
-      closeProvider();
+      unmountProvider();
     }
-  }, [catalog, closeProvider, state.provider.providerId]);
+  }, [catalog, state.provider.providerId, unmountProvider]);
 
   const runDiscovery = useCallback(
     async (
       providerId: string,
       signal: AbortSignal,
+      forceRemount = false,
     ): Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>> => {
       try {
         const entry = getProvider(catalog, providerId);
         const id = providerKey(entry);
-        const instanceId = openProvider(providerId);
+        const instanceId = openProvider(providerId, forceRemount);
         await waitForLoad(instanceId);
         signal.throwIfAborted();
         dispatch({ type: "provider/discovering", instanceId });
@@ -218,6 +228,9 @@ export function RuntimeProvider({
               : { mode: "custom" },
           signal,
         });
+        if (entry.source === "custom") {
+          assertProviderToolCapacity(rawTools);
+        }
         const normalized = rejectDuplicateToolNames(
           rawTools.map((tool) =>
             normalizeDiscoveredTool({
@@ -225,6 +238,7 @@ export function RuntimeProvider({
               instanceId,
               expectedOrigin: entry.origin,
               tool,
+              enforceCustomSchemaBounds: entry.source === "custom",
             }),
           ),
         );
@@ -255,14 +269,19 @@ export function RuntimeProvider({
           dispatch({ type: "provider/failed", reason: error.code });
           return boundedError(error.code, error.message);
         }
-        const cancelled =
-          signal.aborted ||
-          (error instanceof DOMException && error.name === "AbortError");
-        const code = cancelled
-          ? "cancelled"
-          : error instanceof Error && error.name === "DiscoveryTimeoutError"
-            ? "discovery_timeout"
-            : "discovery_failed";
+        const code =
+          isCancellation(error, signal)
+            ? "cancelled"
+            : error instanceof Error && error.name === "DiscoveryTimeoutError"
+              ? "discovery_timeout"
+              : error instanceof Error &&
+                  (error.message === "schema_too_large" ||
+                    error.message === "invalid_schema" ||
+                    error.message === "provider_tool_limit")
+                ? error.message
+                : error instanceof Error && error.message === "invalid_json"
+                  ? "invalid_schema"
+                : "discovery_failed";
         dispatch({ type: "provider/failed", reason: code });
         return boundedError(code, "Capability discovery failed.");
       }
@@ -273,12 +292,25 @@ export function RuntimeProvider({
   const listProviders = useCallback(
     (): BoundedResultEnvelope<ListProvidersOutput> => {
       const output: ListProvidersOutput = {
-        providers: catalog.providers.map((provider) => ({
-          providerId: providerKey(provider),
-          label: provider.label,
-          source: provider.source,
-          capability: provider.capability,
-        })),
+        providers: catalog.providers.map((provider) =>
+          provider.source === "builtin"
+            ? {
+                providerId: provider.providerId,
+                label: provider.label,
+                source: "builtin",
+                capability: "workflow-ready",
+              }
+            : {
+                providerId: provider.id,
+                label: provider.label,
+                source: "custom",
+                capability:
+                  provider.grantedTools.length > 0
+                    ? "granted-invoke"
+                    : "discovery-only",
+                grantedTools: provider.grantedTools,
+              },
+        ),
       };
       return boundedSuccess(output);
     },
@@ -290,11 +322,19 @@ export function RuntimeProvider({
       input: DiscoverCapabilitiesInput,
       signal: AbortSignal,
     ): Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>> => {
+      const releaseOperation = acquireOperationLease(agentOperationRef);
+      if (!releaseOperation) {
+        return boundedError(
+          "operation_in_progress",
+          "Another provider operation is already in progress.",
+        );
+      }
       dispatch({ type: "control/set", control: "agent" });
       try {
         return await runDiscovery(input.providerId, signal);
       } finally {
         dispatch({ type: "control/set", control: "human" });
+        releaseOperation();
       }
     },
     [runDiscovery],
@@ -304,6 +344,39 @@ export function RuntimeProvider({
     (providerId: string) =>
       runDiscovery(providerId, new AbortController().signal),
     [runDiscovery],
+  );
+
+  const invokeGrantedTool = useCallback(
+    async (
+      input: InvokeGrantedToolInput,
+      signal: AbortSignal,
+    ): Promise<BoundedResultEnvelope<InvokeGrantedToolOutput>> => {
+      return runGrantedTool({
+        input,
+        signal,
+        dependencies: {
+          catalog,
+          acquireOperation: () => {
+            const release = acquireOperationLease(agentOperationRef);
+            if (!release) {
+              return null;
+            }
+            dispatch({ type: "control/set", control: "agent" });
+            return () => {
+              dispatch({ type: "control/set", control: "human" });
+              release();
+            };
+          },
+          getState: () => stateRef.current,
+          discover: (providerId, operationSignal) =>
+            runDiscovery(providerId, operationSignal, true),
+          getHandle: (instanceId, origin, toolName) =>
+            handlesRef.current.get(instanceId, origin, toolName),
+          getModelContext: () => document.modelContext,
+        },
+      });
+    },
+    [catalog, runDiscovery],
   );
 
   const prepareWorkflow = useCallback((
@@ -339,145 +412,36 @@ export function RuntimeProvider({
       input: ExecuteWorkflowInput,
       signal: AbortSignal,
     ): Promise<BoundedResultEnvelope<ExecuteWorkflowOutput>> => {
-      const current = stateRef.current;
-      if (
-        current.workflow.id !== input.workflowId ||
-        current.workflow.lifecycle !== "prepared" ||
-        current.workflow.steps.length === 0
-      ) {
+      const releaseOperation = acquireOperationLease(agentOperationRef);
+      if (!releaseOperation) {
         return boundedError(
-          "workflow_not_prepared",
-          "No prepared workflow matches that id.",
+          "operation_in_progress",
+          "Another provider operation is already in progress.",
         );
       }
-      const steps = current.workflow.steps;
 
       const combined = new AbortController();
       const onAbort = () => combined.abort();
       signal.addEventListener("abort", onAbort, { once: true });
       executionAbortRef.current = combined;
-
-      dispatch({ type: "workflow/executing", workflowId: input.workflowId });
-      const results: WorkflowStepResult[] = [];
-      const evidenceParts: string[] = [];
       try {
-        for (let index = 0; index < steps.length; index += 1) {
-          const step = steps[index];
-          if (!step) {
-            throw new Error("execution_failed");
-          }
-          dispatch({
-            type: "workflow/step",
-            workflowId: input.workflowId,
-            index,
-          });
-          const discovered = await runDiscovery(
-            step.providerId,
-            combined.signal,
-          );
-          if (discovered.status === "error") {
-            dispatch({
-              type: "workflow/failed",
-              workflowId: input.workflowId,
-              reason: discovered.code,
-            });
-            return discovered;
-          }
-          combined.signal.throwIfAborted();
-
-          const live = stateRef.current;
-          const revalidated = revalidatePreparedStep({ state: live, step });
-          if (!revalidated.ok) {
-            dispatch({ type: "workflow/invalidate" });
-            return revalidated.error;
-          }
-          if (!live.provider.instanceId) {
-            dispatch({ type: "workflow/invalidate" });
-            return boundedError(
-              "revalidation_failed",
-              "The provider document is gone.",
-            );
-          }
-
-          const handle = handlesRef.current.get(
-            live.provider.instanceId,
-            step.origin,
-            step.toolName,
-          );
-          const descriptor = live.discoveredTools.find(
-            (tool) =>
-              tool.providerId === step.providerId &&
-              tool.name === step.toolName,
-          );
-          if (!handle || !descriptor) {
-            dispatch({ type: "workflow/invalidate" });
-            return boundedError(
-              "revalidation_failed",
-              "The prepared tool is no longer registered.",
-            );
-          }
-
-          const modelContext = document.modelContext;
-          if (!modelContext) {
-            dispatch({ type: "webmcp/unavailable" });
-            dispatch({
-              type: "workflow/failed",
-              workflowId: input.workflowId,
-              reason: "webmcp_unavailable",
-            });
-            return boundedError(
-              "webmcp_unavailable",
-              "WebMCP is unavailable in this browser.",
-            );
-          }
-
-          dispatch({ type: "workflow/executing", workflowId: input.workflowId });
-          const resultText = await executeRegisteredTool({
-            modelContext,
-            tool: handle,
-            invokeKind: descriptor.invokeKind,
-            input: step.arguments,
-            signal: combined.signal,
-          });
-          const parsed = parsePassToolResult(
-            step.namespacedName,
-            parseBoundedJsonResult(parseExecuteResultText(resultText)),
-          );
-          if (!parsed) {
-            throw new Error("execution_failed");
-          }
-          results.push(parsed.result);
-          evidenceParts.push(parsed.evidence);
-        }
-
-        const evidence = evidenceParts.join("; ");
-        dispatch({
-          type: "workflow/passed",
-          workflowId: input.workflowId,
-          results,
-          evidence,
+        return await executePass({
+          input,
+          signal: combined.signal,
+          dependencies: {
+            getState: () => stateRef.current,
+            dispatch,
+            discover: (providerId, operationSignal) =>
+              runDiscovery(providerId, operationSignal, true),
+            getHandle: (instanceId, origin, toolName) =>
+              handlesRef.current.get(instanceId, origin, toolName),
+            getModelContext: () => document.modelContext,
+          },
         });
-        return boundedSuccess({ results });
-      } catch (error) {
-        const cancelled =
-          combined.signal.aborted ||
-          (error instanceof DOMException && error.name === "AbortError");
-        if (cancelled) {
-          dispatch({
-            type: "workflow/cancelled",
-            workflowId: input.workflowId,
-          });
-          return boundedError("cancelled", "Workflow was cancelled.");
-        }
-        dispatch({
-          type: "workflow/failed",
-          workflowId: input.workflowId,
-          reason: "execution_failed",
-        });
-        return boundedError("execution_failed", "Workflow execution failed.");
       } finally {
         signal.removeEventListener("abort", onAbort);
         executionAbortRef.current = null;
+        releaseOperation();
       }
     },
     [runDiscovery],
@@ -533,7 +497,7 @@ export function RuntimeProvider({
     const surface = surfaceRef.current;
     const workArea = stageSlotRef.current;
     const tray = traySlotRef.current;
-    const session = windowSessionRef.current;
+    const session = windowSession;
     if (!workspace || !surface || !workArea) {
       return;
     }
@@ -560,7 +524,7 @@ export function RuntimeProvider({
       session.openStage();
     }
     surface.inert = false;
-  }, []);
+  }, [windowSession]);
 
   const requestPlacement = useCallback(
     (placement: "stage" | "tray") => {
@@ -580,10 +544,10 @@ export function RuntimeProvider({
         return;
       }
       if (placement === "tray") {
-        windowSessionRef.current.snapshotStage();
+        windowSession.snapshotStage();
       }
       if (placement === "stage") {
-        windowSessionRef.current.restoreStage();
+        windowSession.restoreStage();
       } else {
         applySurfaceLayout("tray");
       }
@@ -595,7 +559,7 @@ export function RuntimeProvider({
         stageSlotRef.current?.focus();
       }
     },
-    [applySurfaceLayout],
+    [applySurfaceLayout, windowSession],
   );
 
   const activateProvider = useCallback(
@@ -617,7 +581,7 @@ export function RuntimeProvider({
 
   useIsomorphicLayoutEffect(() => {
     if (state.provider.lifecycle === "unmounted") {
-      windowSessionRef.current.unbind();
+      windowSession.unbind();
       return;
     }
     applySurfaceLayout(state.provider.placement);
@@ -642,7 +606,7 @@ export function RuntimeProvider({
           applySurfaceLayout("tray");
           return;
         }
-        windowSessionRef.current.relayout();
+        windowSession.relayout();
       });
     });
     observer.observe(workspace);
@@ -652,10 +616,10 @@ export function RuntimeProvider({
     }
     if (
       state.provider.placement === "stage" &&
-      !windowSessionRef.current.hasFrame()
+      !windowSession.hasFrame()
     ) {
       requestAnimationFrame(() => {
-        windowSessionRef.current.openStage();
+        windowSession.openStage();
       });
     }
     return () => {
@@ -665,7 +629,12 @@ export function RuntimeProvider({
         layoutRafRef.current = 0;
       }
     };
-  }, [applySurfaceLayout, state.provider.lifecycle, state.provider.placement]);
+  }, [
+    applySurfaceLayout,
+    state.provider.lifecycle,
+    state.provider.placement,
+    windowSession,
+  ]);
 
   const api = useMemo<RuntimeApi>(
     () => ({
@@ -684,7 +653,7 @@ export function RuntimeProvider({
       closeProvider,
       activateProvider,
       testProvider,
-      windowSession: windowSessionRef.current,
+      windowSession
     }),
     [
       account,
@@ -695,6 +664,7 @@ export function RuntimeProvider({
       testProvider,
       requestPlacement,
       state,
+      windowSession,
     ],
   );
 
@@ -712,6 +682,7 @@ export function RuntimeProvider({
       <GatewayRegistrar
         listProviders={listProviders}
         discoverCapabilities={discoverCapabilities}
+        invokeGrantedTool={invokeGrantedTool}
         prepareWorkflow={prepareWorkflow}
         executeWorkflow={executeWorkflow}
         cancelWorkflow={cancelWorkflow}

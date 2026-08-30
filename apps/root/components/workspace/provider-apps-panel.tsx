@@ -24,12 +24,19 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import type { NormalizedToolDescriptor } from "@repo/contracts";
 
 import { Button } from "@repo/ui/button";
+import { Badge } from "@repo/ui/badge";
+import { Checkbox } from "@repo/ui/checkbox";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
 
 import { providerKey } from "@/lib/providers/catalog";
+import {
+  deriveProviderGrantRows,
+  grantBadgeForRow,
+} from "@/lib/providers/provider-grants";
 import { useProviderLibrary } from "@/lib/providers/provider-library";
 import { useRuntime } from "@/lib/runtime/runtime-context";
 import {
@@ -47,7 +54,20 @@ export function ProviderAppsPanel() {
   const [editing, setEditing] = useState<CustomProvider | "new" | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [liveTools, setLiveTools] = useState<
+    Record<
+      string,
+      {
+        origin: string;
+        entryUrl: string;
+        tools: NormalizedToolDescriptor[];
+      }
+    >
+  >({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmWriteGrant, setConfirmWriteGrant] = useState<string | null>(
+    null,
+  );
   const reduceMotion = useReducedMotion();
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -74,8 +94,27 @@ export function ProviderAppsPanel() {
   async function test(providerId: string) {
     setTesting(providerId);
     setStatus(null);
+    setConfirmWriteGrant(null);
+    const provider = library.catalog.providers.find(
+      (entry) => providerKey(entry) === providerId,
+    );
+    setLiveTools((current) => {
+      const next = { ...current };
+      delete next[providerId];
+      return next;
+    });
     const result = await testProvider(providerId);
     setTesting(null);
+    if (result.status === "success") {
+      setLiveTools((current) => ({
+        ...current,
+        [providerId]: {
+          origin: result.data.origin,
+          entryUrl: provider?.entryUrl ?? "",
+          tools: result.data.tools,
+        },
+      }));
+    }
     setStatus(
       result.status === "success"
         ? `${result.data.tools.length} tool${result.data.tools.length === 1 ? "" : "s"} discovered`
@@ -141,20 +180,26 @@ export function ProviderAppsPanel() {
         </AnimatePresence>
         <div className="space-y-1">
           {library.catalog.providers.map((provider) => {
-          const id = providerKey(provider);
-          const reference: DockReference = { kind: "provider", id };
-          const pinned = library.isPinned(reference);
-          return (
-            <motion.div
-              key={id}
-              layout="position"
-              transition={
-                reduceMotion
-                  ? { duration: 0 }
-                  : { duration: 0.2, ease: [0.16, 1, 0.3, 1] }
-              }
-              className="rounded-xl bg-white/6 p-2 ring-1 ring-white/10"
-            >
+            const id = providerKey(provider);
+            const reference: DockReference = { kind: "provider", id };
+            const pinned = library.isPinned(reference);
+            const discovery = liveTools[id];
+            const discoveredTools =
+              discovery?.origin === provider.origin &&
+              discovery.entryUrl === provider.entryUrl
+                ? discovery.tools
+                : [];
+            return (
+              <motion.div
+                key={id}
+                layout="position"
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { duration: 0.2, ease: [0.16, 1, 0.3, 1] }
+                }
+                className="rounded-xl bg-white/6 p-2 ring-1 ring-white/10"
+              >
               <div className="flex items-center gap-2">
                 <Image
                   src={provider.icon}
@@ -169,7 +214,10 @@ export function ProviderAppsPanel() {
                     {provider.label}
                   </p>
                   <p className="truncate text-xs text-white/45">
-                    {provider.capability}
+                    {provider.source === "custom" &&
+                    provider.grantedTools.length > 0
+                      ? "granted-invoke"
+                      : provider.capability}
                   </p>
                 </div>
                 <Button
@@ -239,9 +287,91 @@ export function ProviderAppsPanel() {
                   </>
                 ) : null}
               </div>
-            </motion.div>
-          );
-        })}
+                {provider.source === "custom" &&
+                (discoveredTools.length > 0 ||
+                  provider.grantedTools.length > 0) ? (
+                  <div className="mt-2 space-y-1 border-t border-white/10 pt-2">
+                    {deriveProviderGrantRows(
+                      provider.grantedTools,
+                      discoveredTools,
+                    ).map((row) => {
+                      const granted = row.state !== "discovered-ungranted";
+                      const confirmationKey = `${id}:${row.name}`;
+                      const confirming =
+                        confirmWriteGrant === confirmationKey;
+                      const badge = grantBadgeForRow(row);
+                      return (
+                        <div key={row.name}>
+                          <label className="flex min-h-8 items-center gap-2 rounded-lg px-2 text-xs text-white/75 hover:bg-white/6">
+                            <Checkbox
+                              checked={granted}
+                              aria-label={`${granted ? "Revoke" : "Grant"} ${row.name}`}
+                              onCheckedChange={(checked) => {
+                                const nextGranted = checked === true;
+                                if (
+                                  nextGranted &&
+                                  row.descriptor?.readOnlyHint !== true
+                                ) {
+                                  setConfirmWriteGrant(confirmationKey);
+                                  return;
+                                }
+                                setConfirmWriteGrant(null);
+                                library.setGrantedTools(
+                                  id,
+                                  nextGranted
+                                    ? [...provider.grantedTools, row.name]
+                                    : provider.grantedTools.filter(
+                                        (name) => name !== row.name,
+                                      ),
+                                );
+                              }}
+                            />
+                            <span className="min-w-0 flex-1 truncate">
+                              {row.name}
+                            </span>
+                            <Badge
+                              variant={badge.variant}
+                              className="h-5 rounded-full px-2 text-xs"
+                            >
+                              {badge.label}
+                            </Badge>
+                          </label>
+                          {confirming ? (
+                            <div
+                              role="alert"
+                              className="mx-2 mb-1 flex flex-wrap items-center gap-2 rounded-lg bg-warning-wash px-2 py-1.5 text-xs text-warning-ink"
+                            >
+                              <span className="min-w-0 flex-1">
+                                This tool may change data.
+                              </span>
+                              <Button
+                                variant="destructive"
+                                onClick={() => {
+                                  library.setGrantedTools(id, [
+                                    ...provider.grantedTools,
+                                    row.name,
+                                  ]);
+                                  setConfirmWriteGrant(null);
+                                }}
+                              >
+                                Grant
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                onClick={() => setConfirmWriteGrant(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </motion.div>
+            );
+          })}
         </div>
       </LayoutGroup>
       <div className="mt-2 flex items-center justify-between gap-3 px-1">

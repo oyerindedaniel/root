@@ -5,6 +5,7 @@ import { searchProductsInputSchema, searchProductsOutputSchema } from "./shop.js
 import {
   contractVersionSchema,
   gatewayErrorCodeSchema,
+  MAX_PROVIDER_TOOLS,
   normalizedToolDescriptorSchema,
   originSchema,
   providerIdSchema,
@@ -77,7 +78,7 @@ export const proposedWorkflowStepSchema = z.discriminatedUnion("tool", [
 
 export type ProposedWorkflowStep = z.infer<typeof proposedWorkflowStepSchema>;
 
-export const prepareWorkflowInputSchema = z.object({
+export const prepareWorkflowInputSchema = z.strictObject({
   steps: z
     .array(proposedWorkflowStepSchema)
     .min(1)
@@ -141,7 +142,9 @@ export const workflowStepResultSchema = z.discriminatedUnion("tool", [
 
 export type WorkflowStepResult = z.infer<typeof workflowStepResultSchema>;
 
-export const discoverCapabilitiesInputSchema = z.object({
+export const listProvidersInputSchema = z.strictObject({});
+
+export const discoverCapabilitiesInputSchema = z.strictObject({
   providerId: providerIdSchema,
 });
 
@@ -153,11 +156,32 @@ export const discoverCapabilitiesOutputSchema = z.object({
   providerId: providerIdSchema,
   origin: originSchema,
   contractVersion: contractVersionSchema.nullable(),
-  tools: z.array(normalizedToolDescriptorSchema),
+  tools: z.array(normalizedToolDescriptorSchema).max(MAX_PROVIDER_TOOLS),
 });
 
 export type DiscoverCapabilitiesOutput = z.infer<
   typeof discoverCapabilitiesOutputSchema
+>;
+
+export const invokeGrantedToolInputSchema = z.strictObject({
+  providerId: providerIdSchema,
+  tool: webmcpToolNameSchema,
+  arguments: z.record(z.string(), z.unknown()),
+});
+
+export type InvokeGrantedToolInput = z.infer<
+  typeof invokeGrantedToolInputSchema
+>;
+
+export const invokeGrantedToolOutputSchema = z.strictObject({
+  providerId: providerIdSchema,
+  tool: webmcpToolNameSchema,
+  untrusted: z.literal(true),
+  data: z.unknown(),
+});
+
+export type InvokeGrantedToolOutput = z.infer<
+  typeof invokeGrantedToolOutputSchema
 >;
 
 export const prepareWorkflowOutputSchema = z.object({
@@ -170,7 +194,7 @@ export const prepareWorkflowOutputSchema = z.object({
 
 export type PrepareWorkflowOutput = z.infer<typeof prepareWorkflowOutputSchema>;
 
-export const executeWorkflowInputSchema = z.object({
+export const executeWorkflowInputSchema = z.strictObject({
   workflowId: workflowExecutionIdSchema,
 });
 
@@ -185,7 +209,7 @@ export const executeWorkflowOutputSchema = z.object({
 
 export type ExecuteWorkflowOutput = z.infer<typeof executeWorkflowOutputSchema>;
 
-export const cancelWorkflowInputSchema = z.object({
+export const cancelWorkflowInputSchema = z.strictObject({
   workflowId: workflowExecutionIdSchema,
 });
 
@@ -197,7 +221,7 @@ export const cancelWorkflowOutputSchema = z.object({
 
 export type CancelWorkflowOutput = z.infer<typeof cancelWorkflowOutputSchema>;
 
-export const inspectWorkflowInputSchema = z.object({
+export const inspectWorkflowInputSchema = z.strictObject({
   workflowId: workflowExecutionIdSchema,
 });
 
@@ -215,12 +239,36 @@ export const inspectWorkflowOutputSchema = z.object({
 
 export type InspectWorkflowOutput = z.infer<typeof inspectWorkflowOutputSchema>;
 
-export const providerSummarySchema = z.strictObject({
+const providerSummaryBase = {
   providerId: providerIdSchema,
   label: z.string().min(1).max(80),
-  source: z.enum(["builtin", "custom"]),
-  capability: z.enum(["workflow-ready", "discovery-only"]),
-});
+};
+
+const grantedToolNamesSchema = z
+  .array(webmcpToolNameSchema)
+  .max(MAX_PROVIDER_TOOLS)
+  .superRefine((names, context) => {
+    if (new Set(names).size !== names.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Granted tool names must be unique.",
+      });
+    }
+  });
+
+export const providerSummarySchema = z.discriminatedUnion("source", [
+  z.strictObject({
+    ...providerSummaryBase,
+    source: z.literal("builtin"),
+    capability: z.literal("workflow-ready"),
+  }),
+  z.strictObject({
+    ...providerSummaryBase,
+    source: z.literal("custom"),
+    capability: z.enum(["discovery-only", "granted-invoke"]),
+    grantedTools: grantedToolNamesSchema,
+  }),
+]);
 
 export type ProviderSummary = z.infer<typeof providerSummarySchema>;
 
@@ -233,6 +281,7 @@ export type ListProvidersOutput = z.infer<typeof listProvidersOutputSchema>;
 export const gatewayToolNameSchema = z.enum([
   "list_providers",
   "discover_capabilities",
+  "invoke_granted_tool",
   "prepare_workflow",
   "execute_workflow",
   "cancel_workflow",
@@ -244,6 +293,7 @@ export type GatewayToolName = z.infer<typeof gatewayToolNameSchema>;
 export const ROOT_GATEWAY_TOOLS = [
   "list_providers",
   "discover_capabilities",
+  "invoke_granted_tool",
   "prepare_workflow",
   "execute_workflow",
   "cancel_workflow",

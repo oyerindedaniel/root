@@ -10,9 +10,15 @@ export const providerIdSchema = z
 
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
-export const webmcpToolNameSchema = z.string().min(1).max(64);
+export const webmcpToolNameSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_.-]+$/);
 
 export type WebmcpToolName = z.infer<typeof webmcpToolNameSchema>;
+
+export const MAX_PROVIDER_TOOLS = 256;
 
 export function readOrigin(value: string): string {
   const url = new URL(value);
@@ -55,7 +61,7 @@ export const webmcpAnnotationsSchema = z.object({
 
 export const normalizedToolDescriptorSchema = z.object({
   providerId: providerIdSchema,
-  namespacedName: z.string().min(1).max(129),
+  namespacedName: z.string().min(1).max(193),
   name: webmcpToolNameSchema,
   title: z.string().min(1).max(120),
   description: z.string().min(1).max(500),
@@ -73,14 +79,22 @@ export type NormalizedToolDescriptor = z.infer<
 
 export const gatewayErrorCodeSchema = z.enum([
   "invalid_arguments",
+  "input_too_large",
+  "schema_too_large",
+  "invalid_schema",
+  "output_too_large",
+  "provider_tool_limit",
   "unsupported_graph",
   "tool_not_found",
+  "tool_not_granted",
+  "provider_not_invokable",
   "revalidation_failed",
   "webmcp_unavailable",
   "discovery_timeout",
   "discovery_failed",
   "cancelled",
   "execution_failed",
+  "operation_in_progress",
   "workflow_not_prepared",
   "workflow_not_found",
   "missing_env",

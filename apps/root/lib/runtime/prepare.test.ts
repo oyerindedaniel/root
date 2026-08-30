@@ -63,6 +63,30 @@ function readyProvider(
   return state;
 }
 
+function preparedProductStep() {
+  const state = readyProvider(
+    "shop",
+    "search_products",
+    "shop.search_products",
+  );
+  const prepared = prepareWorkflow({
+    state,
+    workflowId: "wf_1",
+    origins,
+    steps: [
+      {
+        providerId: "shop",
+        tool: "search_products",
+        arguments: { query: "keyboard" },
+      },
+    ],
+  });
+  if (!prepared.ok || !prepared.steps[0]) {
+    throw new Error("expected prepare to succeed");
+  }
+  return { state, step: prepared.steps[0] };
+}
+
 describe("prepareWorkflow", () => {
   it("binds one read-only Catalog search against the live document", () => {
     const prepared = prepareWorkflow({
@@ -287,27 +311,72 @@ describe("prepareWorkflow", () => {
 });
 
 describe("revalidatePreparedStep", () => {
-  it("fails when the fingerprint changed", () => {
-    const state = readyProvider(
-      "shop",
-      "search_products",
-      "shop.search_products",
-    );
-    const prepared = prepareWorkflow({
-      state,
-      workflowId: "wf_1",
-      origins,
-      steps: [
-        {
-          providerId: "shop",
-          tool: "search_products",
-          arguments: { query: "keyboard" },
-        },
-      ],
+  it("fails when the provider changed", () => {
+    const { state, step } = preparedProductStep();
+    const revalidated = revalidatePreparedStep({
+      state: {
+        ...state,
+        provider: { ...state.provider, providerId: "accounts" },
+      },
+      step,
     });
-    if (!prepared.ok || !prepared.steps[0]) {
-      throw new Error("expected prepare to succeed");
+
+    expect(revalidated.ok).toBe(false);
+    if (!revalidated.ok) {
+      expect(revalidated.error.code).toBe("revalidation_failed");
     }
+  });
+
+  it("fails when the provider origin changed", () => {
+    const { state, step } = preparedProductStep();
+    const revalidated = revalidatePreparedStep({
+      state: {
+        ...state,
+        provider: { ...state.provider, origin: origins.accounts },
+      },
+      step,
+    });
+
+    expect(revalidated.ok).toBe(false);
+    if (!revalidated.ok) {
+      expect(revalidated.error.code).toBe("revalidation_failed");
+    }
+  });
+
+  it("fails when the tool disappeared", () => {
+    const { state, step } = preparedProductStep();
+    const revalidated = revalidatePreparedStep({
+      state: { ...state, discoveredTools: [] },
+      step,
+    });
+
+    expect(revalidated.ok).toBe(false);
+    if (!revalidated.ok) {
+      expect(revalidated.error.code).toBe("revalidation_failed");
+    }
+  });
+
+  it("fails when the tool lost its read-only hint", () => {
+    const { state, step } = preparedProductStep();
+    const revalidated = revalidatePreparedStep({
+      state: {
+        ...state,
+        discoveredTools: state.discoveredTools.map((tool) => ({
+          ...tool,
+          readOnlyHint: false,
+        })),
+      },
+      step,
+    });
+
+    expect(revalidated.ok).toBe(false);
+    if (!revalidated.ok) {
+      expect(revalidated.error.code).toBe("revalidation_failed");
+    }
+  });
+
+  it("fails when the fingerprint changed", () => {
+    const { state, step } = preparedProductStep();
     const changed = {
       ...state,
       discoveredTools: state.discoveredTools.map((tool) => ({
@@ -317,7 +386,7 @@ describe("revalidatePreparedStep", () => {
     };
     const revalidated = revalidatePreparedStep({
       state: changed,
-      step: prepared.steps[0],
+      step,
     });
     expect(revalidated.ok).toBe(false);
     if (!revalidated.ok) {

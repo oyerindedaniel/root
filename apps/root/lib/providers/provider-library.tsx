@@ -6,7 +6,6 @@ import {
   useMemo,
   type PropsWithChildren,
 } from "react";
-
 import {
   addCustomProvider,
   createProviderCatalog,
@@ -14,6 +13,7 @@ import {
   installedApps,
   moveDockApp,
   pinDockApp,
+  setCustomProviderGrantedTools,
   unpinDockApp,
   updateCustomProvider,
   type InstalledApp,
@@ -35,7 +35,7 @@ import {
 
 type NewCustomProvider = Omit<
   CustomProvider,
-  "id" | "source" | "capability"
+  "id" | "source" | "capability" | "grantedTools"
 >;
 
 export type ProviderLibraryApi = {
@@ -45,6 +45,7 @@ export type ProviderLibraryApi = {
   storageFailure: StorageFailure | null;
   addProvider: (provider: NewCustomProvider) => CustomProvider;
   updateProvider: (provider: CustomProvider) => void;
+  setGrantedTools: (providerId: string, grantedTools: readonly string[]) => void;
   deleteProvider: (providerId: string) => void;
   pin: (reference: DockReference, index?: number) => void;
   unpin: (reference: DockReference) => void;
@@ -111,6 +112,7 @@ export function ProviderLibraryProvider({
           id: `custom-${crypto.randomUUID()}`,
           source: "custom",
           capability: "discovery-only",
+          grantedTools: [],
         };
         update((current) =>
           addCustomProvider(current, entry, directory.builtins),
@@ -120,6 +122,11 @@ export function ProviderLibraryProvider({
       updateProvider(provider) {
         update((current) =>
           updateCustomProvider(current, provider, directory.builtins),
+        );
+      },
+      setGrantedTools(providerId, grantedTools) {
+        update((current) =>
+          setCustomProviderGrantedTools(current, providerId, grantedTools),
         );
       },
       deleteProvider(providerId) {
@@ -159,7 +166,12 @@ export function ProviderLibraryProvider({
         }));
       },
     };
-  }, [defaults.dock, directory.builtins, resolved, store]);
+  }, [
+    defaults.dock,
+    directory.builtins,
+    resolved,
+    store,
+  ]);
 
   return (
     <ProviderLibraryContext.Provider value={api}>

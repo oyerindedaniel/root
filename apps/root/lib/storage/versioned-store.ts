@@ -10,6 +10,7 @@ export type StorageFailure =
 export type StorageSnapshot<T> = {
   value: T;
   failure: StorageFailure | null;
+  hydrated: boolean;
 };
 
 type StorageEventSource = {
@@ -61,6 +62,7 @@ export function createVersionedStore<T>(
   const serverSnapshot: StorageSnapshot<T> = {
     value: defaults,
     failure: null,
+    hydrated: false,
   };
   let cachedRaw: string | null | undefined;
   let cachedSnapshot = serverSnapshot;
@@ -75,20 +77,24 @@ export function createVersionedStore<T>(
     }
     cachedRaw = raw;
     if (raw === null) {
-      cachedSnapshot = serverSnapshot;
+      cachedSnapshot = { value: defaults, failure: null, hydrated: true };
       return cachedSnapshot;
     }
     if (raw.length > options.maxChars) {
-      cachedSnapshot = { value: defaults, failure: "too-large" };
+      cachedSnapshot = {
+        value: defaults,
+        failure: "too-large",
+        hydrated: true,
+      };
       return cachedSnapshot;
     }
     try {
       const parsed = options.schema.safeParse(JSON.parse(raw));
       cachedSnapshot = parsed.success
-        ? { value: parsed.data, failure: null }
-        : { value: defaults, failure: "corrupt" };
+        ? { value: parsed.data, failure: null, hydrated: true }
+        : { value: defaults, failure: "corrupt", hydrated: true };
     } catch {
-      cachedSnapshot = { value: defaults, failure: "corrupt" };
+      cachedSnapshot = { value: defaults, failure: "corrupt", hydrated: true };
     }
     return cachedSnapshot;
   }
@@ -100,28 +106,40 @@ export function createVersionedStore<T>(
   function update(updater: (current: T) => T): StorageSnapshot<T> {
     const next = options.schema.safeParse(updater(read().value));
     if (!next.success) {
-      cachedSnapshot = { value: read().value, failure: "invalid-update" };
+      cachedSnapshot = {
+        value: read().value,
+        failure: "invalid-update",
+        hydrated: true,
+      };
       announce();
       return cachedSnapshot;
     }
     const raw = JSON.stringify(next.data);
     if (raw.length > options.maxChars) {
-      cachedSnapshot = { value: read().value, failure: "too-large" };
+      cachedSnapshot = {
+        value: read().value,
+        failure: "too-large",
+        hydrated: true,
+      };
       announce();
       return cachedSnapshot;
     }
     if (!storage) {
       cachedRaw = raw;
-      cachedSnapshot = { value: next.data, failure: null };
+      cachedSnapshot = { value: next.data, failure: null, hydrated: true };
       announce();
       return cachedSnapshot;
     }
     try {
       storage.setItem(key, raw);
       cachedRaw = raw;
-      cachedSnapshot = { value: next.data, failure: null };
+      cachedSnapshot = { value: next.data, failure: null, hydrated: true };
     } catch {
-      cachedSnapshot = { value: read().value, failure: "quota" };
+      cachedSnapshot = {
+        value: read().value,
+        failure: "quota",
+        hydrated: true,
+      };
     }
     announce();
     return cachedSnapshot;
@@ -132,13 +150,17 @@ export function createVersionedStore<T>(
       try {
         storage.removeItem(key);
       } catch {
-        cachedSnapshot = { value: read().value, failure: "quota" };
+        cachedSnapshot = {
+          value: read().value,
+          failure: "quota",
+          hydrated: true,
+        };
         announce();
         return cachedSnapshot;
       }
     }
     cachedRaw = null;
-    cachedSnapshot = serverSnapshot;
+    cachedSnapshot = { value: defaults, failure: null, hydrated: true };
     announce();
     return cachedSnapshot;
   }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAX_PROVIDER_TOOLS } from "@repo/contracts";
 
 import {
   addCustomProvider,
@@ -10,6 +11,7 @@ import {
   moveDockApp,
   pinDockApp,
   resolveDockApps,
+  setCustomProviderGrantedTools,
   unpinDockApp,
   updateCustomProvider,
 } from "./catalog";
@@ -36,6 +38,7 @@ function custom(overrides: Partial<CustomProvider> = {}): CustomProvider {
     icon: "data:image/webp;base64,AAAA",
     source: "custom",
     capability: "discovery-only",
+    grantedTools: [],
     ...overrides,
   };
 }
@@ -77,6 +80,91 @@ describe("provider catalog", () => {
       directory.builtins,
     );
     expect(updated.customProviders[0]?.label).toBe("Reports");
+  });
+
+  it("preserves grants for presentation edits and revokes trust-surface edits", () => {
+    const added = addCustomProvider(
+      createDefaultWorkspacePreferences(),
+      custom(),
+      directory.builtins,
+    );
+    const granted = setCustomProviderGrantedTools(added, "custom-provider-1", [
+      "read_report",
+    ]);
+    const relabeled = updateCustomProvider(
+      granted,
+      custom({
+        label: "Reports",
+        icon: "data:image/webp;base64,BBBB",
+        grantedTools: [],
+      }),
+      directory.builtins,
+    );
+    expect(relabeled.customProviders[0]?.grantedTools).toEqual(["read_report"]);
+    const moved = updateCustomProvider(
+      relabeled,
+      custom({
+        origin: "https://reports.example",
+        entryUrl: "https://reports.example/app",
+        grantedTools: ["read_report"],
+      }),
+      directory.builtins,
+    );
+    expect(moved.customProviders[0]?.grantedTools).toEqual([]);
+    const regranted = setCustomProviderGrantedTools(
+      relabeled,
+      "custom-provider-1",
+      ["read_report"],
+    );
+    const entryChanged = updateCustomProvider(
+      regranted,
+      custom({
+        label: "Reports",
+        icon: "data:image/webp;base64,BBBB",
+        entryUrl: "https://analytics.example/reports",
+        grantedTools: ["read_report"],
+      }),
+      directory.builtins,
+    );
+    expect(entryChanged.customProviders[0]?.grantedTools).toEqual([]);
+  });
+
+  it("rejects duplicate grants", () => {
+    const added = addCustomProvider(
+      createDefaultWorkspacePreferences(),
+      custom(),
+      directory.builtins,
+    );
+    expect(() =>
+      setCustomProviderGrantedTools(added, "custom-provider-1", [
+        "read_report",
+        "read_report",
+      ]),
+    ).toThrow("invalid_granted_tools");
+  });
+
+  it("persists the full grant capacity without truncation and rejects overflow", () => {
+    const added = addCustomProvider(
+      createDefaultWorkspacePreferences(),
+      custom(),
+      directory.builtins,
+    );
+    const names = Array.from(
+      { length: MAX_PROVIDER_TOOLS },
+      (_, index) => `tool_${index}`,
+    );
+    const granted = setCustomProviderGrantedTools(
+      added,
+      "custom-provider-1",
+      names,
+    );
+    expect(granted.customProviders[0]?.grantedTools).toEqual(names);
+    expect(() =>
+      setCustomProviderGrantedTools(added, "custom-provider-1", [
+        ...names,
+        "overflow",
+      ]),
+    ).toThrow("invalid_granted_tools");
   });
 
   it("rejects reserved identities, duplicate origins, and unsafe URLs", () => {

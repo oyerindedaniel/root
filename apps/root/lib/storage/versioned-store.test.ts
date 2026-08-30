@@ -60,9 +60,10 @@ describe("createVersionedStore", () => {
       preferences.getServerSnapshot(),
     );
     expect(preferences.getServerSnapshot().value.dock).toHaveLength(3);
+    expect(preferences.getServerSnapshot().hydrated).toBe(false);
   });
 
-  it("hydrates valid account-scoped preferences", () => {
+  it("hydrates old account-scoped preferences with compatible defaults", () => {
     const storage = new MemoryStorage();
     const preferences = store(storage);
     storage.setItem(
@@ -77,6 +78,33 @@ describe("createVersionedStore", () => {
       { kind: "provider", id: "shop" },
     ]);
     expect(preferences.getSnapshot().failure).toBeNull();
+    expect(preferences.getSnapshot().hydrated).toBe(true);
+  });
+
+  it("defaults old custom provider grants and rejects duplicates", () => {
+    const oldProvider = {
+      id: "custom-provider-1",
+      label: "Analytics",
+      origin: "https://analytics.example",
+      entryUrl: "https://analytics.example/app",
+      icon: "data:image/webp;base64,AAAA",
+      source: "custom",
+      capability: "discovery-only",
+    };
+    const parsed = workspacePreferencesSchema.parse({
+      version: 1,
+      customProviders: [oldProvider],
+      dock: [],
+    });
+    expect(parsed.customProviders[0]?.grantedTools).toEqual([]);
+    expect(
+      workspacePreferencesSchema.safeParse({
+        ...parsed,
+        customProviders: [
+          { ...oldProvider, grantedTools: ["read_report", "read_report"] },
+        ],
+      }).success,
+    ).toBe(false);
   });
 
   it("falls back for malformed and unknown-version data", () => {

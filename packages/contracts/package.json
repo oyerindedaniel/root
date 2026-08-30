@@ -38,7 +38,7 @@
     "build": "tsc",
     "dev": "tsc --watch --preserveWatchOutput",
     "lint": "eslint . --max-warnings 0",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc --noEmit && tsc -p tsconfig.tests.json",
     "test": "vitest run"
   },
   "dependencies": {

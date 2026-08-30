@@ -31,6 +31,24 @@ function catalogStep() {
   };
 }
 
+function catalogResult() {
+  return {
+    tool: "shop.search_products" as const,
+    data: {
+      status: "success" as const,
+      query: "keyboard",
+      products: [
+        {
+          id: "product_1",
+          name: "Keyboard",
+          description: "A keyboard",
+          priceUsd: 40,
+        },
+      ],
+    },
+  };
+}
+
 describe("runtimeReducer", () => {
   it("starts unmounted and signed in", () => {
     const state = createInitialRuntimeState(account);
@@ -113,6 +131,94 @@ describe("runtimeReducer", () => {
     });
     expect(state.workflow.lifecycle).toBe("cancelled");
     expect(state.control).toBe("human");
+  });
+
+  it("selects the current workflow step", () => {
+    const second = {
+      ...catalogStep(),
+      arguments: { query: "mouse" },
+    };
+    let state = runtimeReducer(mounted(), {
+      type: "workflow/prepared",
+      workflowId: "wf_1",
+      steps: [catalogStep(), second],
+    });
+
+    state = runtimeReducer(state, {
+      type: "workflow/step",
+      workflowId: "wf_1",
+      index: 1,
+    });
+
+    expect(state.workflow.currentStepIndex).toBe(1);
+    expect(state.workflow.step?.arguments).toEqual({ query: "mouse" });
+    expect(state.provider.activeTool).toBe("shop.search_products");
+  });
+
+  it("records a passed workflow", () => {
+    let state = runtimeReducer(mounted(), {
+      type: "workflow/prepared",
+      workflowId: "wf_1",
+      steps: [catalogStep()],
+    });
+    state = runtimeReducer(state, {
+      type: "workflow/executing",
+      workflowId: "wf_1",
+    });
+
+    state = runtimeReducer(state, {
+      type: "workflow/passed",
+      workflowId: "wf_1",
+      results: [catalogResult()],
+      evidence: '1 products for "keyboard"',
+    });
+
+    expect(state.workflow.lifecycle).toBe("passed");
+    expect(state.workflow.results).toEqual([catalogResult()]);
+    expect(state.workflow.evidence).toBe('1 products for "keyboard"');
+    expect(state.provider.outcome).toBe("passed");
+    expect(state.control).toBe("human");
+  });
+
+  it("records a failed workflow", () => {
+    let state = runtimeReducer(mounted(), {
+      type: "workflow/prepared",
+      workflowId: "wf_1",
+      steps: [catalogStep()],
+    });
+    state = runtimeReducer(state, {
+      type: "workflow/executing",
+      workflowId: "wf_1",
+    });
+
+    state = runtimeReducer(state, {
+      type: "workflow/failed",
+      workflowId: "wf_1",
+      reason: "execution_failed",
+    });
+
+    expect(state.workflow.lifecycle).toBe("failed");
+    expect(state.workflow.failureReason).toBe("execution_failed");
+    expect(state.provider.outcome).toBe("failed");
+    expect(state.control).toBe("human");
+  });
+
+  it("invalidates a workflow after failed revalidation", () => {
+    let state = runtimeReducer(mounted(), {
+      type: "workflow/prepared",
+      workflowId: "wf_1",
+      steps: [catalogStep()],
+    });
+    state = runtimeReducer(state, {
+      type: "workflow/executing",
+      workflowId: "wf_1",
+    });
+
+    state = runtimeReducer(state, { type: "workflow/invalidate" });
+
+    expect(state.workflow.lifecycle).toBe("failed");
+    expect(state.workflow.failureReason).toBe("revalidation_failed");
+    expect(state.workflow.steps).toEqual([catalogStep()]);
   });
 
   it("records a signed-out session without clearing the account", () => {
