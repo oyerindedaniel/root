@@ -428,6 +428,9 @@ describe("gateway envelopes", () => {
     expect(boundedError("window_not_found", "No open window.").code).toBe(
       "window_not_found",
     );
+    expect(
+      boundedError("stopped_by_user", "The human took control.").code,
+    ).toBe("stopped_by_user");
     expect(() => boundedError("not_a_code" as never, "Nope.")).toThrow();
   });
 

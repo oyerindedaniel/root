@@ -153,7 +153,27 @@ describe("runtimeReducer", () => {
       workflowId: "wf_1",
     });
     expect(state.workflow.lifecycle).toBe("cancelled");
+    expect(state.workflow.failureReason).toBe("cancelled");
     expect(windowState(state).control).toBe("human");
+  });
+
+  it("records stopped_by_user on a cancelled workflow", () => {
+    let state = runtimeReducer(mounted(), {
+      type: "workflow/prepared",
+      workflowId: "wf_1",
+      steps: [catalogStep()],
+    });
+    state = runtimeReducer(state, {
+      type: "workflow/executing",
+      workflowId: "wf_1",
+    });
+    state = runtimeReducer(state, {
+      type: "workflow/cancelled",
+      workflowId: "wf_1",
+      reason: "stopped_by_user",
+    });
+    expect(state.workflow.failureReason).toBe("stopped_by_user");
+    expect(windowState(state).outcome).toBe("stopped_by_user");
   });
 
   it("selects the current workflow step", () => {

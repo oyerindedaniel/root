@@ -372,4 +372,19 @@ describe("invokeGrantedTool", () => {
     });
     expect(current.releaseOperation).toHaveBeenCalledOnce();
   });
+
+  it("returns stopped_by_user when the adopted instance signal is a Take control abort", async () => {
+    const current = setup();
+    const adopted = new AbortController();
+    current.dependencies.adoptAbort = () => adopted.signal;
+    current.dependencies.discover = async () => {
+      adopted.abort(new DOMException("stopped_by_user", "AbortError"));
+      throw new DOMException("stopped_by_user", "AbortError");
+    };
+    await expect(invoke(current.dependencies)).resolves.toMatchObject({
+      status: "error",
+      code: "stopped_by_user",
+    });
+    expect(current.releaseOperation).toHaveBeenCalledOnce();
+  });
 });

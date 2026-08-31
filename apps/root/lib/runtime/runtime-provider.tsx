@@ -3,6 +3,7 @@
 import {
   boundedError,
   boundedSuccess,
+  GatewayError,
   type Account,
   type BoundedError,
   type BoundedResultEnvelope,
@@ -19,6 +20,7 @@ import {
   type ListProvidersOutput,
   type PrepareWorkflowInput,
   type PrepareWorkflowOutput,
+  type ProviderId,
   type ProviderPlacement,
   type WindowChromeInput,
   type WindowChromeOutput,
@@ -44,7 +46,6 @@ import {
 } from "@/lib/window/placement-motion";
 import { createWindowSession, type WindowSession } from "@/lib/window/session";
 import {
-  DirectoryError,
   getBuiltinProvider,
   type ProviderDirectory,
 } from "@/lib/providers/directory";
@@ -58,13 +59,17 @@ import { useProviderLibrary } from "@/lib/providers/provider-library";
 import { executePass } from "@/lib/runtime/execute-pass";
 import { GatewayRegistrar } from "@/lib/runtime/gateway-registrar";
 import { invokeGrantedTool as runGrantedTool } from "@/lib/runtime/invoke-granted";
-import { isCancellation } from "@/lib/runtime/cancellation";
+import { abortErrorCode, STOPPED_BY_USER, stoppedByUserAbort } from "@/lib/runtime/cancellation";
 import {
   abortInstance,
   adoptInstanceAbort,
   dropInstanceAbort,
 } from "@/lib/runtime/operation-abort";
 import { acquireOperationLease } from "@/lib/runtime/operation-lease";
+import {
+  createPassMinimizeQueue,
+  usedWindowsToMinimize,
+} from "@/lib/runtime/pass-minimize";
 import { prepareWorkflow as bindWorkflow } from "@/lib/runtime/prepare";
 import { runtimeReducer } from "@/lib/runtime/reducer";
 import { resolveOpenWindow } from "@/lib/runtime/window-chrome";
@@ -127,6 +132,14 @@ export function RuntimeProvider({
   const pendingFillRef = useRef(new Set<string>());
   const loadWaitersRef = useRef(new Map<string, LoadWaiter>());
   const trayTargetsRef = useRef(new Map<string, TrayTarget>());
+  const yellowMinimizeRef = useRef<(providerId: ProviderId) => boolean>(
+    () => false,
+  );
+  const passMinimizeQueue = useRef(
+    createPassMinimizeQueue({
+      minimize: (providerId) => yellowMinimizeRef.current(providerId),
+    }),
+  ).current;
 
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const stageSlotRef = useRef<HTMLDivElement | null>(null);
@@ -300,7 +313,7 @@ export function RuntimeProvider({
         };
         return boundedSuccess(output);
       } catch (error) {
-        if (error instanceof DirectoryError) {
+        if (error instanceof GatewayError) {
           if (instanceId) {
             dispatch({
               type: "provider/failed",
@@ -310,23 +323,26 @@ export function RuntimeProvider({
           }
           return boundedError(error.code, error.message);
         }
-        const code =
-          isCancellation(error, signal)
-            ? "cancelled"
-            : error instanceof Error && error.name === "DiscoveryTimeoutError"
-              ? "discovery_timeout"
-              : error instanceof Error &&
-                  (error.message === "schema_too_large" ||
-                    error.message === "invalid_schema" ||
-                    error.message === "provider_tool_limit")
-                ? error.message
-                : error instanceof Error && error.message === "invalid_json"
-                  ? "invalid_schema"
-                : "discovery_failed";
-        if (instanceId) {
-          dispatch({ type: "provider/failed", instanceId, reason: code });
+        const abortCode = abortErrorCode(error, signal);
+        if (abortCode) {
+          return boundedError(
+            abortCode,
+            abortCode === STOPPED_BY_USER
+              ? "Capability discovery was stopped by the user."
+              : "Capability discovery was cancelled.",
+          );
         }
-        return boundedError(code, "Capability discovery failed.");
+        if (instanceId) {
+          dispatch({
+            type: "provider/failed",
+            instanceId,
+            reason: "discovery_failed",
+          });
+        }
+        return boundedError(
+          "discovery_failed",
+          "Capability discovery failed.",
+        );
       }
     },
     [catalog, openProvider, waitForLoad],
@@ -348,7 +364,11 @@ export function RuntimeProvider({
   }, []);
 
   const takeControl = useCallback((instanceId: string) => {
-    abortInstance(instanceAbortsRef.current, instanceId);
+    abortInstance(
+      instanceAbortsRef.current,
+      instanceId,
+      stoppedByUserAbort(),
+    );
   }, []);
 
   const listProviders = useCallback(
@@ -388,7 +408,7 @@ export function RuntimeProvider({
       try {
         instanceId = openProvider(input.providerId, "agent");
       } catch (error) {
-        if (error instanceof DirectoryError) {
+        if (error instanceof GatewayError) {
           return boundedError(error.code, error.message);
         }
         throw error;
@@ -491,11 +511,11 @@ export function RuntimeProvider({
       signal: AbortSignal,
     ): Promise<BoundedResultEnvelope<ExecuteWorkflowOutput>> => {
       const combined = new AbortController();
-      const onAbort = () => combined.abort();
+      const onAbort = () => combined.abort(signal.reason);
       signal.addEventListener("abort", onAbort, { once: true });
       executionAbortRef.current = combined;
       try {
-        return await executePass({
+        const result = await executePass({
           input,
           signal: combined.signal,
           dependencies: {
@@ -514,7 +534,7 @@ export function RuntimeProvider({
               );
               const onInstanceAbort = () => {
                 if (!combined.signal.aborted) {
-                  combined.abort();
+                  combined.abort(instanceSignal.reason);
                 }
               };
               instanceSignal.addEventListener("abort", onInstanceAbort, {
@@ -533,6 +553,16 @@ export function RuntimeProvider({
             getModelContext: () => document.modelContext,
           },
         });
+        if (result.status === "success") {
+          passMinimizeQueue.enqueue(
+            usedWindowsToMinimize(
+              stateRef.current.workflow.steps,
+              (providerId) =>
+                findProviderWindow(stateRef.current, providerId)?.placement,
+            ),
+          );
+        }
+        return result;
       } finally {
         signal.removeEventListener("abort", onAbort);
         executionAbortRef.current = null;
@@ -645,7 +675,7 @@ export function RuntimeProvider({
     },
     [],
   );
-  const finishPlacement = useCallback((instanceId: string) => {
+  const commitPlacement = useCallback((instanceId: string) => {
     const motion = stateRef.current.motion;
     if (
       motion.status === "suction" &&
@@ -657,6 +687,27 @@ export function RuntimeProvider({
     }
     dispatch({ type: "motion/finish", instanceId });
   }, []);
+  const finishPlacement = useCallback(
+    (instanceId: string) => {
+      commitPlacement(instanceId);
+      passMinimizeQueue.drain();
+    },
+    [commitPlacement],
+  );
+  const pourToTray = useCallback(
+    (windowState: ProviderWindow): boolean => {
+      if (windowState.placement === "tray") {
+        return false;
+      }
+      requestPlacement(windowState.instanceId, "tray");
+      if (windowSessionsRef.current.get(windowState.instanceId)?.isMaximized()) {
+        commitPlacement(windowState.instanceId);
+        return false;
+      }
+      return true;
+    },
+    [commitPlacement, requestPlacement],
+  );
   const cancelPlacement = useCallback((instanceId: string) => {
     dispatch({ type: "motion/cancel", instanceId });
   }, []);
@@ -686,16 +737,22 @@ export function RuntimeProvider({
       if ("status" in resolved) {
         return resolved;
       }
-      if (resolved.placement !== "tray") {
-        requestPlacement(resolved.instanceId, "tray");
-        if (windowSessionsRef.current.get(resolved.instanceId)?.isMaximized()) {
-          finishPlacement(resolved.instanceId);
-        }
-      }
+      pourToTray(resolved);
       return boundedSuccess({ providerId: resolved.providerId });
     },
-    [catalog, finishPlacement, requestPlacement],
+    [catalog, pourToTray],
   );
+  yellowMinimizeRef.current = (providerId) => {
+    const resolved = resolveOpenWindow(
+      catalog,
+      stateRef.current,
+      providerId,
+    );
+    if ("status" in resolved) {
+      return false;
+    }
+    return pourToTray(resolved);
+  };
 
   const maximizeWindow = useCallback(
     (

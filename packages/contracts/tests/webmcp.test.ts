@@ -2,13 +2,16 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
   boundedError,
+  GatewayError,
   namespacedToolName,
   normalizeInputSchema,
+  parseBoundedJsonResult,
   parseJsonObject,
   providerIdSchema,
   schemaFingerprint,
   serializeExecuteInput,
   toolHandleKey,
+  WEBMCP_MAX_RESULT_CHARS,
 } from "../src/webmcp.js";
 import { searchProductsInputSchema } from "../src/shop.js";
 import { searchCasesInputSchema } from "../src/cases.js";
@@ -36,6 +39,12 @@ describe("input schema normalization", () => {
 
   it("rejects invalid schema JSON", () => {
     expect(() => parseJsonObject("{")).toThrow("invalid_json");
+    expect(() => normalizeInputSchema("{")).toThrow(GatewayError);
+    try {
+      normalizeInputSchema("{");
+    } catch (error) {
+      expect(error).toMatchObject({ code: "invalid_schema" });
+    }
   });
 });
 
@@ -94,6 +103,17 @@ describe("bounded errors and shop input", () => {
     expect(boundedError("unsupported_graph", "Only one step.").code).toBe(
       "unsupported_graph",
     );
+  });
+
+  it("throws GatewayError when the result exceeds the byte limit", () => {
+    expect(() =>
+      parseBoundedJsonResult("x".repeat(WEBMCP_MAX_RESULT_CHARS + 1)),
+    ).toThrow(GatewayError);
+    try {
+      parseBoundedJsonResult("x".repeat(WEBMCP_MAX_RESULT_CHARS + 1));
+    } catch (error) {
+      expect(error).toMatchObject({ code: "output_too_large" });
+    }
   });
 });
 

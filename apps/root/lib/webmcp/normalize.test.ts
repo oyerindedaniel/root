@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  GatewayError,
   MAX_PROVIDER_TOOLS,
   SEARCH_PRODUCTS_INPUT_SCHEMA,
+  type GatewayErrorCode,
   type RegisteredTool,
 } from "@repo/contracts";
 
@@ -16,6 +18,17 @@ import {
   normalizeDiscoveredTool,
   rejectDuplicateToolNames,
 } from "./normalize";
+
+function expectGatewayCode(run: () => void, code: GatewayErrorCode) {
+  try {
+    run();
+  } catch (error) {
+    expect(error).toBeInstanceOf(GatewayError);
+    expect(error).toMatchObject({ code });
+    return;
+  }
+  throw new Error(`expected GatewayError ${code}`);
+}
 
 function tool(overrides: Partial<RegisteredTool> = {}): RegisteredTool {
   return {
@@ -73,14 +86,16 @@ describe("normalizeDiscoveredTool", () => {
   });
 
   it("rejects an unexpected origin", () => {
-    expect(() =>
-      normalizeDiscoveredTool({
-        providerId: "shop",
-        instanceId: "shop_1",
-        expectedOrigin: "http://localhost:3002",
-        tool: tool({ origin: "http://localhost:3001" }),
-      }),
-    ).toThrow("origin_mismatch");
+    expectGatewayCode(
+      () =>
+        normalizeDiscoveredTool({
+          providerId: "shop",
+          instanceId: "shop_1",
+          expectedOrigin: "http://localhost:3002",
+          tool: tool({ origin: "http://localhost:3001" }),
+        }),
+      "discovery_failed",
+    );
   });
 
   it("rejects invalid protocol tool identities", () => {
@@ -98,52 +113,58 @@ describe("normalizeDiscoveredTool", () => {
   });
 
   it("bounds custom schemas before normalization", () => {
-    expect(() =>
-      normalizeDiscoveredTool({
-        providerId: "custom-analytics-1",
-        instanceId: "custom-analytics-1_instance",
-        expectedOrigin: "https://analytics.example",
-        enforceCustomSchemaBounds: true,
-        tool: tool({
-          origin: "https://analytics.example",
-          inputSchema: `{"description":"${"x".repeat(MAX_CUSTOM_SCHEMA_CHARS)}"}`,
+    expectGatewayCode(
+      () =>
+        normalizeDiscoveredTool({
+          providerId: "custom-analytics-1",
+          instanceId: "custom-analytics-1_instance",
+          expectedOrigin: "https://analytics.example",
+          enforceCustomSchemaBounds: true,
+          tool: tool({
+            origin: "https://analytics.example",
+            inputSchema: `{"description":"${"x".repeat(MAX_CUSTOM_SCHEMA_CHARS)}"}`,
+          }),
         }),
-      }),
-    ).toThrow("schema_too_large");
+      "schema_too_large",
+    );
     let nested: Record<string, unknown> = { type: "string" };
     for (let depth = 0; depth <= MAX_CUSTOM_SCHEMA_DEPTH; depth += 1) {
       nested = { type: "object", properties: { value: nested } };
     }
-    expect(() =>
-      normalizeDiscoveredTool({
-        providerId: "custom-analytics-1",
-        instanceId: "custom-analytics-1_instance",
-        expectedOrigin: "https://analytics.example",
-        enforceCustomSchemaBounds: true,
-        tool: tool({
-          origin: "https://analytics.example",
-          inputSchema: nested,
+    expectGatewayCode(
+      () =>
+        normalizeDiscoveredTool({
+          providerId: "custom-analytics-1",
+          instanceId: "custom-analytics-1_instance",
+          expectedOrigin: "https://analytics.example",
+          enforceCustomSchemaBounds: true,
+          tool: tool({
+            origin: "https://analytics.example",
+            inputSchema: nested,
+          }),
         }),
-      }),
-    ).toThrow("schema_too_large");
+      "schema_too_large",
+    );
     const properties = Object.fromEntries(
       Array.from({ length: MAX_CUSTOM_SCHEMA_NODES }, (_, index) => [
         `field_${index}`,
         { type: "string" },
       ]),
     );
-    expect(() =>
-      normalizeDiscoveredTool({
-        providerId: "custom-analytics-1",
-        instanceId: "custom-analytics-1_instance",
-        expectedOrigin: "https://analytics.example",
-        enforceCustomSchemaBounds: true,
-        tool: tool({
-          origin: "https://analytics.example",
-          inputSchema: { type: "object", properties },
+    expectGatewayCode(
+      () =>
+        normalizeDiscoveredTool({
+          providerId: "custom-analytics-1",
+          instanceId: "custom-analytics-1_instance",
+          expectedOrigin: "https://analytics.example",
+          enforceCustomSchemaBounds: true,
+          tool: tool({
+            origin: "https://analytics.example",
+            inputSchema: { type: "object", properties },
+          }),
         }),
-      }),
-    ).toThrow("schema_too_large");
+      "schema_too_large",
+    );
   });
 });
 
@@ -153,9 +174,11 @@ describe("assertProviderToolCapacity", () => {
       tool({ name: `tool_${index}` }),
     );
     expect(() => assertProviderToolCapacity(tools)).not.toThrow();
-    expect(() =>
-      assertProviderToolCapacity([...tools, tool({ name: "overflow" })]),
-    ).toThrow("provider_tool_limit");
+    expectGatewayCode(
+      () =>
+        assertProviderToolCapacity([...tools, tool({ name: "overflow" })]),
+      "provider_tool_limit",
+    );
   });
 });
 
@@ -173,8 +196,9 @@ describe("rejectDuplicateToolNames", () => {
       expectedOrigin: "http://localhost:3002",
       tool: tool(),
     });
-    expect(() => rejectDuplicateToolNames([first, second])).toThrow(
-      "duplicate_tool_name",
+    expectGatewayCode(
+      () => rejectDuplicateToolNames([first, second]),
+      "discovery_failed",
     );
   });
 });

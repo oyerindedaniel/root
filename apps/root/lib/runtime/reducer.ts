@@ -1,3 +1,4 @@
+import { CANCELLED } from "./cancellation";
 import {
   createDraftWorkflow,
   findProviderWindow,
@@ -432,6 +433,7 @@ export function runtimeReducer(
       if (current.id === null) {
         return state;
       }
+      const reason = action.reason ?? CANCELLED;
       const workflow: WorkflowCancelled = {
         lifecycle: "cancelled",
         id: current.id,
@@ -440,14 +442,14 @@ export function runtimeReducer(
         step: current.step,
         results: [...current.results],
         evidence: current.evidence,
-        failureReason: "cancelled",
+        failureReason: reason,
       };
       return updateStepWindow({
         ...state,
         workflow,
       }, (windowState) => ({
           ...settleLifecycle(windowState),
-          outcome: "cancelled",
+          outcome: reason,
       }));
     }
     case "workflow/invalidate":

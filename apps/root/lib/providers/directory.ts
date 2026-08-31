@@ -1,6 +1,7 @@
 import {
   ACCOUNTS_CONTRACT_VERSION,
   ACCOUNTS_EXPECTED_TOOLS,
+  GatewayError,
   SHOP_CONTRACT_VERSION,
   SHOP_EXPECTED_TOOLS,
   SUPPORT_CONTRACT_VERSION,
@@ -11,13 +12,10 @@ import {
   type TrustedProviderEntry,
 } from "@repo/contracts";
 
-export class DirectoryError extends Error {
-  readonly code: GatewayErrorCode;
-
+export class DirectoryError extends GatewayError {
   constructor(code: GatewayErrorCode, message: string) {
-    super(message);
+    super(code, message);
     this.name = "DirectoryError";
-    this.code = code;
   }
 }
 

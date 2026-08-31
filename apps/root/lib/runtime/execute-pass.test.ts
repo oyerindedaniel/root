@@ -281,6 +281,25 @@ describe("executePass", () => {
 
     expect(result.status === "error" ? result.code : null).toBe("cancelled");
     expect(harness.getState().workflow.lifecycle).toBe("cancelled");
+    expect(harness.getState().workflow.failureReason).toBe("cancelled");
+  });
+
+  it("returns stopped_by_user when the signal aborts for Take control", async () => {
+    const harness = createHarness([productStep]);
+    const controller = new AbortController();
+    harness.dependencies.discover = async (_providerId, signal) => {
+      controller.abort(new DOMException("stopped_by_user", "AbortError"));
+      signal.throwIfAborted();
+      return boundedError("discovery_failed", "unreachable");
+    };
+
+    const result = await run(harness, controller.signal);
+
+    expect(result.status === "error" ? result.code : null).toBe(
+      "stopped_by_user",
+    );
+    expect(harness.getState().workflow.lifecycle).toBe("cancelled");
+    expect(harness.getState().workflow.failureReason).toBe("stopped_by_user");
   });
 
   it("fails malformed tool output", async () => {

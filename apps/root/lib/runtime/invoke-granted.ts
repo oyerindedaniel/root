@@ -1,6 +1,7 @@
 import {
   boundedError,
   boundedSuccess,
+  GatewayError,
   parseBoundedJsonResult,
   parseExecuteResultText,
   type BoundedResultEnvelope,
@@ -13,11 +14,10 @@ import {
 } from "@repo/contracts";
 
 import { getProvider, type ProviderCatalog } from "@/lib/providers/catalog";
-import { DirectoryError } from "@/lib/providers/directory";
 import { executeRegisteredTool } from "@/lib/webmcp/execute";
 import { validateJsonSchemaInput } from "@/lib/webmcp/json-schema-validator";
 
-import { isCancellation } from "./cancellation";
+import { abortErrorCode, STOPPED_BY_USER } from "./cancellation";
 import { findProviderWindow, type RuntimeState } from "./state";
 
 export type InvokeGrantedDependencies = {
@@ -54,7 +54,7 @@ export async function invokeGrantedTool(options: {
   try {
     provider = getProvider(dependencies.catalog, input.providerId);
   } catch (error) {
-    if (error instanceof DirectoryError) {
+    if (error instanceof GatewayError) {
       return boundedError(error.code, error.message);
     }
     return boundedError("unknown_provider", "Provider is not installed.");
@@ -156,11 +156,8 @@ export async function invokeGrantedTool(options: {
     try {
       data = parseBoundedJsonResult(parseExecuteResultText(resultText));
     } catch (error) {
-      if (error instanceof Error && error.message === "result_too_large") {
-        return boundedError(
-          "output_too_large",
-          "Tool output exceeds the result limit.",
-        );
+      if (error instanceof GatewayError) {
+        return boundedError(error.code, error.message);
       }
       return boundedError("execution_failed", "Tool output is not valid JSON.");
     }
@@ -171,9 +168,16 @@ export async function invokeGrantedTool(options: {
       data,
     });
   } catch (error) {
-    return isCancellation(error, operationSignal)
-      ? boundedError("cancelled", "Tool invocation was cancelled.")
-      : boundedError("execution_failed", "Tool invocation failed.");
+    const code = abortErrorCode(error, operationSignal);
+    if (code) {
+      return boundedError(
+        code,
+        code === STOPPED_BY_USER
+          ? "Tool invocation was stopped by the user."
+          : "Tool invocation was cancelled.",
+      );
+    }
+    return boundedError("execution_failed", "Tool invocation failed.");
   } finally {
     releaseOperation();
   }

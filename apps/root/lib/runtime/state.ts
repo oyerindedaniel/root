@@ -9,6 +9,8 @@ import type {
   WorkflowStepResult,
 } from "@repo/contracts";
 
+import type { AbortErrorCode } from "./cancellation";
+
 export type SessionStatus = "authenticated" | "signed-out";
 
 export type WebmcpStatus = "unknown" | "available" | "unavailable";
@@ -103,7 +105,7 @@ export type WorkflowCancelled = {
   step: PreparedWorkflowStep | null;
   results: WorkflowStepResult[];
   evidence: string | null;
-  failureReason: "cancelled";
+  failureReason: AbortErrorCode;
 };
 
 export type WorkflowState =
@@ -179,7 +181,11 @@ export type RuntimeAction =
       evidence: string;
     }
   | { type: "workflow/failed"; workflowId?: string; reason: GatewayErrorCode }
-  | { type: "workflow/cancelled"; workflowId: string }
+  | {
+      type: "workflow/cancelled";
+      workflowId: string;
+      reason?: AbortErrorCode;
+    }
   | { type: "workflow/invalidate" };
 
 export function createDraftWorkflow(): WorkflowDraft {

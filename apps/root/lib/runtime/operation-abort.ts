@@ -30,10 +30,12 @@ export function adoptInstanceAbort(
   return controller.signal;
 }
 
-export function abortInstance(aborts: InstanceAborts, instanceId: string) {
-  aborts.get(instanceId)?.abort(
-    new DOMException("Cancelled", "AbortError"),
-  );
+export function abortInstance(
+  aborts: InstanceAborts,
+  instanceId: string,
+  reason: unknown = new DOMException("Cancelled", "AbortError"),
+) {
+  aborts.get(instanceId)?.abort(reason);
 }
 
 export function dropInstanceAbort(

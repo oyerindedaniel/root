@@ -1,6 +1,7 @@
 import {
   boundedError,
   boundedSuccess,
+  GatewayError,
   parseBoundedJsonResult,
   parseExecuteResultText,
   type BoundedResultEnvelope,
@@ -14,7 +15,7 @@ import {
 } from "@repo/contracts";
 
 import { executeRegisteredTool } from "../webmcp/execute";
-import { isCancellation } from "./cancellation";
+import { abortErrorCode, CANCELLED, STOPPED_BY_USER } from "./cancellation";
 import { parsePassToolResult } from "./pass-tools";
 import { revalidatePreparedStep } from "./prepare";
 import {
@@ -76,7 +77,10 @@ export async function executePass(options: {
     for (let index = 0; index < steps.length; index += 1) {
       const step = steps[index];
       if (!step) {
-        throw new Error("execution_failed");
+        throw new GatewayError(
+          "execution_failed",
+          "Workflow execution failed.",
+        );
       }
       const releaseOperation = dependencies.acquireOperation(step.providerId);
       if (!releaseOperation) {
@@ -98,6 +102,17 @@ export async function executePass(options: {
         });
         const discovered = await dependencies.discover(step.providerId, signal);
         if (discovered.status === "error") {
+          if (
+            discovered.code === STOPPED_BY_USER ||
+            discovered.code === CANCELLED
+          ) {
+            dependencies.dispatch({
+              type: "workflow/cancelled",
+              workflowId: input.workflowId,
+              reason: discovered.code,
+            });
+            return discovered;
+          }
           dependencies.dispatch({
             type: "workflow/failed",
             workflowId: input.workflowId,
@@ -169,7 +184,10 @@ export async function executePass(options: {
           parseBoundedJsonResult(parseExecuteResultText(resultText)),
         );
         if (!parsed) {
-          throw new Error("execution_failed");
+          throw new GatewayError(
+            "execution_failed",
+            "Workflow execution failed.",
+          );
         }
         results.push(parsed.result);
         evidenceParts.push(parsed.evidence);
@@ -187,12 +205,27 @@ export async function executePass(options: {
     });
     return boundedSuccess({ results });
   } catch (error) {
-    if (isCancellation(error, signal)) {
+    const code = abortErrorCode(error, signal);
+    if (code) {
       dependencies.dispatch({
         type: "workflow/cancelled",
         workflowId: input.workflowId,
+        reason: code,
       });
-      return boundedError("cancelled", "Workflow was cancelled.");
+      return boundedError(
+        code,
+        code === STOPPED_BY_USER
+          ? "Workflow was stopped by the user."
+          : "Workflow was cancelled.",
+      );
+    }
+    if (error instanceof GatewayError) {
+      dependencies.dispatch({
+        type: "workflow/failed",
+        workflowId: input.workflowId,
+        reason: error.code,
+      });
+      return boundedError(error.code, error.message);
     }
     dependencies.dispatch({
       type: "workflow/failed",

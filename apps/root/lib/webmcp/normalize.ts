@@ -1,4 +1,5 @@
 import {
+  GatewayError,
   MAX_PROVIDER_TOOLS,
   namespacedToolName,
   normalizeInputSchema,
@@ -32,7 +33,10 @@ export function normalizeDiscoveredTool(options: {
   enforceCustomSchemaBounds?: boolean;
 }): DiscoveredTool {
   if (options.tool.origin !== options.expectedOrigin) {
-    throw new Error("origin_mismatch");
+    throw new GatewayError(
+      "discovery_failed",
+      "Tool origin does not match the provider.",
+    );
   }
   webmcpToolNameSchema.parse(options.tool.name);
 
@@ -41,7 +45,10 @@ export function normalizeDiscoveredTool(options: {
     typeof options.tool.inputSchema === "string" &&
     options.tool.inputSchema.length > MAX_CUSTOM_SCHEMA_CHARS
   ) {
-    throw new Error("schema_too_large");
+    throw new GatewayError(
+      "schema_too_large",
+      "Tool schema exceeds the size limit.",
+    );
   }
   const { schema, invokeKind } = normalizeInputSchema(options.tool.inputSchema);
   if (options.enforceCustomSchemaBounds) {
@@ -51,8 +58,11 @@ export function normalizeDiscoveredTool(options: {
       maxNodes: MAX_CUSTOM_SCHEMA_NODES,
     });
     if (!bounds.ok) {
-      throw new Error(
+      throw new GatewayError(
         bounds.reason === "too_large" ? "schema_too_large" : "invalid_schema",
+        bounds.reason === "too_large"
+          ? "Tool schema exceeds the size limit."
+          : "Tool schema is invalid.",
       );
     }
   }
@@ -86,7 +96,10 @@ export function assertProviderToolCapacity(
   tools: readonly RegisteredTool[],
 ): void {
   if (tools.length > MAX_PROVIDER_TOOLS) {
-    throw new Error("provider_tool_limit");
+    throw new GatewayError(
+      "provider_tool_limit",
+      "Provider registered more tools than allowed.",
+    );
   }
 }
 
@@ -97,7 +110,10 @@ export function rejectDuplicateToolNames(
   for (const tool of tools) {
     const key = `${tool.descriptor.origin}:${tool.descriptor.name}`;
     if (seen.has(key)) {
-      throw new Error("duplicate_tool_name");
+      throw new GatewayError(
+        "discovery_failed",
+        "Provider registered duplicate tool names.",
+      );
     }
     seen.add(key);
   }

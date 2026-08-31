@@ -20,6 +20,18 @@ describe("instance abort", () => {
     expect(parent.signal.aborted).toBe(false);
   });
 
+  it("stores the Take control reason on the adopted signal", () => {
+    const aborts = new Map<string, AbortController>();
+    const parent = new AbortController();
+    const accounts = adoptInstanceAbort(aborts, "accounts_1", parent.signal);
+    const reason = new DOMException("stopped_by_user", "AbortError");
+
+    abortInstance(aborts, "accounts_1", reason);
+
+    expect(accounts.reason).toBe(reason);
+    expect(parent.signal.aborted).toBe(false);
+  });
+
   it("forwards parent abort to the adopted signal", () => {
     const aborts = new Map<string, AbortController>();
     const parent = new AbortController();

@@ -1,13 +1,17 @@
 import {
+  GatewayError,
   WEBMCP_DISCOVERY_POLL_MS,
   WEBMCP_DISCOVERY_TIMEOUT_MS,
   type ModelContext,
   type RegisteredTool,
 } from "@repo/contracts";
 
-export class DiscoveryTimeoutError extends Error {
+export class DiscoveryTimeoutError extends GatewayError {
   constructor() {
-    super("Provider tools were not discovered in time.");
+    super(
+      "discovery_timeout",
+      "Provider tools were not discovered in time.",
+    );
     this.name = "DiscoveryTimeoutError";
   }
 }

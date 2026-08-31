@@ -93,6 +93,7 @@ export const gatewayErrorCodeSchema = z.enum([
   "discovery_timeout",
   "discovery_failed",
   "cancelled",
+  "stopped_by_user",
   "execution_failed",
   "operation_in_progress",
   "workflow_not_prepared",
@@ -106,6 +107,16 @@ export const gatewayErrorCodeSchema = z.enum([
 ]);
 
 export type GatewayErrorCode = z.infer<typeof gatewayErrorCodeSchema>;
+
+export class GatewayError extends Error {
+  readonly code: GatewayErrorCode;
+
+  constructor(code: GatewayErrorCode, message: string) {
+    super(message);
+    this.name = "GatewayError";
+    this.code = code;
+  }
+}
 
 export const boundedErrorSchema = z.object({
   status: z.literal("error"),
@@ -211,16 +222,27 @@ export function normalizeInputSchema(raw: unknown): {
   invokeKind: InvokeKind;
 } {
   if (typeof raw === "string") {
-    return {
-      schema: parseJsonObject(raw),
-      invokeKind: "json-string",
-    };
+    try {
+      return {
+        schema: parseJsonObject(raw),
+        invokeKind: "json-string",
+      };
+    } catch {
+      throw new GatewayError(
+        "invalid_schema",
+        "Tool schema JSON is invalid.",
+      );
+    }
   }
 
-  return {
-    schema: jsonObjectSchema.parse(raw),
-    invokeKind: "object",
-  };
+  try {
+    return {
+      schema: jsonObjectSchema.parse(raw),
+      invokeKind: "object",
+    };
+  } catch {
+    throw new GatewayError("invalid_schema", "Tool schema is invalid.");
+  }
 }
 
 export function serializeExecuteInput(
@@ -249,7 +271,10 @@ export function parseExecuteResultText(result: unknown): string {
 
 export function parseBoundedJsonResult(resultText: string): unknown {
   if (resultText.length > WEBMCP_MAX_RESULT_CHARS) {
-    throw new Error("result_too_large");
+    throw new GatewayError(
+      "output_too_large",
+      "Tool output exceeds the result limit.",
+    );
   }
   return JSON.parse(resultText);
 }
