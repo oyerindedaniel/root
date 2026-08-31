@@ -340,4 +340,36 @@ describe("invokeGrantedTool", () => {
       invoke(current.dependencies, {}, controller.signal),
     ).resolves.toMatchObject({ status: "error", code: "cancelled" });
   });
+
+  it("uses the adopted instance signal for discovery and execution", async () => {
+    const current = setup();
+    const adopted = new AbortController();
+    const adoptAbort = vi.fn(() => adopted.signal);
+    current.dependencies.adoptAbort = adoptAbort;
+    const executeTool = vi.fn(async () => JSON.stringify({ rows: [{ id: "r1" }] }));
+    current.dependencies.executeTool = executeTool;
+    await expect(invoke(current.dependencies)).resolves.toMatchObject({
+      status: "success",
+    });
+    expect(adoptAbort).toHaveBeenCalledWith("custom_1", expect.any(AbortSignal));
+    expect(current.discover).toHaveBeenCalledWith(provider.id, adopted.signal);
+    expect(executeTool).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: adopted.signal }),
+    );
+  });
+
+  it("returns cancelled when the adopted instance signal aborts", async () => {
+    const current = setup();
+    const adopted = new AbortController();
+    current.dependencies.adoptAbort = () => adopted.signal;
+    current.dependencies.discover = async () => {
+      adopted.abort();
+      throw new DOMException("Aborted", "AbortError");
+    };
+    await expect(invoke(current.dependencies)).resolves.toMatchObject({
+      status: "error",
+      code: "cancelled",
+    });
+    expect(current.releaseOperation).toHaveBeenCalledOnce();
+  });
 });

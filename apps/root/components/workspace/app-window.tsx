@@ -2,12 +2,15 @@
 
 import type { ProviderPlacement } from "@repo/contracts";
 import { cn } from "@repo/ui/lib/cn";
-import type {
-  PointerEvent as ReactPointerEvent,
-  PropsWithChildren,
-  RefObject,
+import {
+  useEffect,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type PropsWithChildren,
+  type RefObject,
 } from "react";
 
+import { TakeControlOverlay } from "@/components/workspace/take-control-overlay";
 import type { ResizeEdge } from "@/lib/window/frame";
 import type { WindowSession } from "@/lib/window/session";
 
@@ -24,6 +27,8 @@ export function AppWindowRoot({
   onFocus,
   onClose,
   onMinimize,
+  onTakeControl,
+  leased = false,
   children,
 }: PropsWithChildren<{
   providerId: string;
@@ -38,9 +43,25 @@ export function AppWindowRoot({
   onFocus: () => void;
   onClose: () => void;
   onMinimize: () => void;
+  onTakeControl?: () => void;
+  leased?: boolean;
 }>) {
   const onStage = placement === "stage";
   const interactive = onStage && !suctioning;
+  const [pointerInside, setPointerInside] = useState(false);
+  const showTakeControl = Boolean(
+    leased && onStage && onTakeControl && !suctioning,
+  );
+
+  useEffect(() => {
+    if (!leased || !onStage) {
+      return;
+    }
+    const node = surfaceRef.current;
+    if (node?.matches(":hover")) {
+      setPointerInside(true);
+    }
+  }, [leased, onStage, surfaceRef]);
 
   return (
     <div
@@ -50,7 +71,10 @@ export function AppWindowRoot({
       data-placement={placement}
       data-suctioning={suctioning ? "" : undefined}
       data-motion-target={motionTarget ?? undefined}
+      data-leased={leased ? "" : undefined}
       onPointerDownCapture={onFocus}
+      onPointerEnter={() => setPointerInside(true)}
+      onPointerLeave={() => setPointerInside(false)}
       className={
         onStage
           ? "absolute z-10 flex flex-col overflow-hidden rounded-xl border border-black/10 bg-background shadow-[0_24px_80px_rgb(0_0_0_/_0.28)]"
@@ -100,7 +124,15 @@ export function AppWindowRoot({
           {title}
         </p>
       </div>
-      <div className="app-scroll min-h-0 min-w-0 flex-1">{children}</div>
+      <div className="app-scroll relative min-h-0 min-w-0 flex-1">
+        {children}
+        {showTakeControl && onTakeControl ? (
+          <TakeControlOverlay
+            pointerInside={pointerInside}
+            onTakeControl={onTakeControl}
+          />
+        ) : null}
+      </div>
       {interactive ? <WindowEdges onBegin={windowSession.begin} /> : null}
     </div>
   );

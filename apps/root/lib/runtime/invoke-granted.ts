@@ -23,6 +23,7 @@ import { findProviderWindow, type RuntimeState } from "./state";
 export type InvokeGrantedDependencies = {
   catalog: ProviderCatalog;
   acquireOperation: () => (() => void) | null;
+  adoptAbort?: (instanceId: string, parent: AbortSignal) => AbortSignal;
   getState: () => RuntimeState;
   discover: (
     providerId: string,
@@ -78,12 +79,20 @@ export async function invokeGrantedTool(options: {
     );
   }
 
+  let operationSignal = signal;
   try {
-    const discovered = await dependencies.discover(input.providerId, signal);
+    const opened = findProviderWindow(dependencies.getState(), input.providerId);
+    if (opened && dependencies.adoptAbort) {
+      operationSignal = dependencies.adoptAbort(opened.instanceId, signal);
+    }
+    const discovered = await dependencies.discover(
+      input.providerId,
+      operationSignal,
+    );
     if (discovered.status === "error") {
       return discovered;
     }
-    signal.throwIfAborted();
+    operationSignal.throwIfAborted();
     const state = dependencies.getState();
     const windowState = findProviderWindow(state, provider.id);
     if (
@@ -141,7 +150,7 @@ export async function invokeGrantedTool(options: {
       tool: handle,
       invokeKind: descriptor.invokeKind,
       input: input.arguments,
-      signal,
+      signal: operationSignal,
     });
     let data;
     try {
@@ -162,7 +171,7 @@ export async function invokeGrantedTool(options: {
       data,
     });
   } catch (error) {
-    return isCancellation(error, signal)
+    return isCancellation(error, operationSignal)
       ? boundedError("cancelled", "Tool invocation was cancelled.")
       : boundedError("execution_failed", "Tool invocation failed.");
   } finally {

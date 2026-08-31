@@ -57,6 +57,11 @@ import { executePass } from "@/lib/runtime/execute-pass";
 import { GatewayRegistrar } from "@/lib/runtime/gateway-registrar";
 import { invokeGrantedTool as runGrantedTool } from "@/lib/runtime/invoke-granted";
 import { isCancellation } from "@/lib/runtime/cancellation";
+import {
+  abortInstance,
+  adoptInstanceAbort,
+  dropInstanceAbort,
+} from "@/lib/runtime/operation-abort";
 import { acquireOperationLease } from "@/lib/runtime/operation-lease";
 import { prepareWorkflow as bindWorkflow } from "@/lib/runtime/prepare";
 import { runtimeReducer } from "@/lib/runtime/reducer";
@@ -114,6 +119,7 @@ export function RuntimeProvider({
   const handlesRef = useRef(new ToolHandleRegistry());
   const executionAbortRef = useRef<AbortController | null>(null);
   const operationLeasesRef = useRef(new Set<string>());
+  const instanceAbortsRef = useRef(new Map<string, AbortController>());
   const loadWaitersRef = useRef(new Map<string, LoadWaiter>());
   const trayTargetsRef = useRef(new Map<string, TrayTarget>());
 
@@ -336,6 +342,10 @@ export function RuntimeProvider({
     };
   }, []);
 
+  const takeControl = useCallback((instanceId: string) => {
+    abortInstance(instanceAbortsRef.current, instanceId);
+  }, []);
+
   const listProviders = useCallback(
     (): BoundedResultEnvelope<ListProvidersOutput> => {
       const output: ListProvidersOutput = {
@@ -385,9 +395,15 @@ export function RuntimeProvider({
           "Another provider operation is already in progress.",
         );
       }
+      const operationSignal = adoptInstanceAbort(
+        instanceAbortsRef.current,
+        instanceId,
+        signal,
+      );
       try {
-        return await runDiscovery(input.providerId, signal);
+        return await runDiscovery(input.providerId, operationSignal);
       } finally {
+        dropInstanceAbort(instanceAbortsRef.current, instanceId);
         releaseOperation();
       }
     },
@@ -412,8 +428,17 @@ export function RuntimeProvider({
           catalog,
           acquireOperation: () => {
             const instanceId = openProvider(input.providerId, "agent");
-            return holdWindowLease(instanceId);
+            const releaseLease = holdWindowLease(instanceId);
+            if (!releaseLease) {
+              return null;
+            }
+            return () => {
+              dropInstanceAbort(instanceAbortsRef.current, instanceId);
+              releaseLease();
+            };
           },
+          adoptAbort: (instanceId, parent) =>
+            adoptInstanceAbort(instanceAbortsRef.current, instanceId, parent),
           getState: () => stateRef.current,
           discover: (providerId, operationSignal) =>
             runDiscovery(providerId, operationSignal),
@@ -473,7 +498,28 @@ export function RuntimeProvider({
             dispatch,
             acquireOperation: (providerId) => {
               const instanceId = openProvider(providerId, "agent");
-              return holdWindowLease(instanceId);
+              const releaseLease = holdWindowLease(instanceId);
+              if (!releaseLease) {
+                return null;
+              }
+              const instanceSignal = adoptInstanceAbort(
+                instanceAbortsRef.current,
+                instanceId,
+                combined.signal,
+              );
+              const onInstanceAbort = () => {
+                if (!combined.signal.aborted) {
+                  combined.abort();
+                }
+              };
+              instanceSignal.addEventListener("abort", onInstanceAbort, {
+                once: true,
+              });
+              return () => {
+                instanceSignal.removeEventListener("abort", onInstanceAbort);
+                dropInstanceAbort(instanceAbortsRef.current, instanceId);
+                releaseLease();
+              };
             },
             discover: (providerId, operationSignal) =>
               runDiscovery(providerId, operationSignal),
@@ -663,6 +709,7 @@ export function RuntimeProvider({
                 onMotionFinish={finishPlacement}
                 onMotionCancel={cancelPlacement}
                 onClose={closeProvider}
+                onTakeControl={takeControl}
               />
             ) : null;
           })}
@@ -699,6 +746,7 @@ function ProviderWindowHost({
   onMotionFinish,
   onMotionCancel,
   onClose,
+  onTakeControl,
 }: {
   windowState: ProviderWindow;
   catalog: ProviderCatalog;
@@ -717,6 +765,7 @@ function ProviderWindowHost({
   onMotionFinish: (instanceId: string) => void;
   onMotionCancel: (instanceId: string) => void;
   onClose: (instanceId: string) => void;
+  onTakeControl: (instanceId: string) => void;
 }) {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -921,6 +970,8 @@ function ProviderWindowHost({
         }
         getTrayTarget(windowState.providerId)?.restoreButton?.focus();
       }}
+      leased={windowState.control === "agent"}
+      onTakeControl={() => onTakeControl(windowState.instanceId)}
     >
       <iframe
         ref={iframeRef}
