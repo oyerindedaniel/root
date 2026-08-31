@@ -56,6 +56,11 @@ import {
   type ProviderCatalog,
 } from "@/lib/providers/catalog";
 import { useProviderLibrary } from "@/lib/providers/provider-library";
+import {
+  LIVE_PROVIDER_CAP,
+  liveWindowCount,
+  pickEvictionVictim,
+} from "@/lib/runtime/evict-window";
 import { executePass } from "@/lib/runtime/execute-pass";
 import { GatewayRegistrar } from "@/lib/runtime/gateway-registrar";
 import { invokeGrantedTool as runGrantedTool } from "@/lib/runtime/invoke-granted";
@@ -172,6 +177,12 @@ export function RuntimeProvider({
     loadWaitersRef.current.get(instanceId)?.resolve();
   }, []);
 
+  const closeProvider = useCallback((instanceId: string) => {
+    handlesRef.current.invalidateInstance(instanceId);
+    loadWaitersRef.current.delete(instanceId);
+    dispatch({ type: "provider/unmount", instanceId });
+  }, []);
+
   const openProvider = useCallback(
     (providerId: string, openedBy: ControlOwner = "human") => {
       const current = stateRef.current;
@@ -190,10 +201,15 @@ export function RuntimeProvider({
         });
         return existing.instanceId;
       }
-      if (existing) {
-        handlesRef.current.invalidateInstance(existing.instanceId);
-        loadWaitersRef.current.delete(existing.instanceId);
-        dispatch({ type: "provider/unmount", instanceId: existing.instanceId });
+      const replacingId = existing?.instanceId;
+      if (replacingId) {
+        closeProvider(replacingId);
+      }
+      if (liveWindowCount(current, replacingId) >= LIVE_PROVIDER_CAP) {
+        const victim = pickEvictionVictim(current, replacingId);
+        if (victim) {
+          closeProvider(victim);
+        }
       }
       const instanceId = `${id}_${crypto.randomUUID()}`;
       waitForLoad(instanceId);
@@ -209,14 +225,8 @@ export function RuntimeProvider({
       dispatch({ type: "placement/appear", instanceId });
       return instanceId;
     },
-    [catalog, waitForLoad],
+    [catalog, closeProvider, waitForLoad],
   );
-
-  const closeProvider = useCallback((instanceId: string) => {
-    handlesRef.current.invalidateInstance(instanceId);
-    loadWaitersRef.current.delete(instanceId);
-    dispatch({ type: "provider/unmount", instanceId });
-  }, []);
 
   useEffect(() => {
     for (const windowState of Object.values(state.windows)) {
