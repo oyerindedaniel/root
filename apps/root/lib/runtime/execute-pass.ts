@@ -26,6 +26,7 @@ import {
 export type ExecutePassDependencies = {
   getState: () => RuntimeState;
   dispatch: (action: RuntimeAction) => void;
+  acquireOperation: (providerId: string) => (() => void) | null;
   discover: (
     providerId: string,
     signal: AbortSignal,
@@ -77,88 +78,104 @@ export async function executePass(options: {
       if (!step) {
         throw new Error("execution_failed");
       }
-      dependencies.dispatch({
-        type: "workflow/step",
-        workflowId: input.workflowId,
-        index,
-      });
-      const discovered = await dependencies.discover(step.providerId, signal);
-      if (discovered.status === "error") {
+      const releaseOperation = dependencies.acquireOperation(step.providerId);
+      if (!releaseOperation) {
         dependencies.dispatch({
           type: "workflow/failed",
           workflowId: input.workflowId,
-          reason: discovered.code,
+          reason: "operation_in_progress",
         });
-        return discovered;
-      }
-      signal.throwIfAborted();
-
-      const live = dependencies.getState();
-      const revalidated = revalidatePreparedStep({ state: live, step });
-      if (!revalidated.ok) {
-        dependencies.dispatch({ type: "workflow/invalidate" });
-        return revalidated.error;
-      }
-      const windowState = findProviderWindow(live, step.providerId);
-      if (!windowState) {
-        dependencies.dispatch({ type: "workflow/invalidate" });
         return boundedError(
-          "revalidation_failed",
-          "The provider document is gone.",
+          "operation_in_progress",
+          "Another provider operation is already in progress.",
         );
       }
-
-      const handle = dependencies.getHandle(
-        windowState.instanceId,
-        step.origin,
-        step.toolName,
-      );
-      const descriptor = windowState.discoveredTools.find(
-        (tool) =>
-          tool.providerId === step.providerId && tool.name === step.toolName,
-      );
-      if (!handle || !descriptor) {
-        dependencies.dispatch({ type: "workflow/invalidate" });
-        return boundedError(
-          "revalidation_failed",
-          "The prepared tool is no longer registered.",
-        );
-      }
-
-      const modelContext = dependencies.getModelContext();
-      if (!modelContext) {
-        dependencies.dispatch({ type: "webmcp/unavailable" });
+      try {
         dependencies.dispatch({
-          type: "workflow/failed",
+          type: "workflow/step",
           workflowId: input.workflowId,
-          reason: "webmcp_unavailable",
+          index,
         });
-        return boundedError(
-          "webmcp_unavailable",
-          "WebMCP is unavailable in this browser.",
-        );
-      }
+        const discovered = await dependencies.discover(step.providerId, signal);
+        if (discovered.status === "error") {
+          dependencies.dispatch({
+            type: "workflow/failed",
+            workflowId: input.workflowId,
+            reason: discovered.code,
+          });
+          return discovered;
+        }
+        signal.throwIfAborted();
 
-      dependencies.dispatch({
-        type: "workflow/executing",
-        workflowId: input.workflowId,
-      });
-      const resultText = await executeTool({
-        modelContext,
-        tool: handle,
-        invokeKind: descriptor.invokeKind,
-        input: step.arguments,
-        signal,
-      });
-      const parsed = parsePassToolResult(
-        step.namespacedName,
-        parseBoundedJsonResult(parseExecuteResultText(resultText)),
-      );
-      if (!parsed) {
-        throw new Error("execution_failed");
+        const live = dependencies.getState();
+        const revalidated = revalidatePreparedStep({ state: live, step });
+        if (!revalidated.ok) {
+          dependencies.dispatch({ type: "workflow/invalidate" });
+          return revalidated.error;
+        }
+        const windowState = findProviderWindow(live, step.providerId);
+        if (!windowState) {
+          dependencies.dispatch({ type: "workflow/invalidate" });
+          return boundedError(
+            "revalidation_failed",
+            "The provider document is gone.",
+          );
+        }
+
+        const handle = dependencies.getHandle(
+          windowState.instanceId,
+          step.origin,
+          step.toolName,
+        );
+        const descriptor = windowState.discoveredTools.find(
+          (tool) =>
+            tool.providerId === step.providerId && tool.name === step.toolName,
+        );
+        if (!handle || !descriptor) {
+          dependencies.dispatch({ type: "workflow/invalidate" });
+          return boundedError(
+            "revalidation_failed",
+            "The prepared tool is no longer registered.",
+          );
+        }
+
+        const modelContext = dependencies.getModelContext();
+        if (!modelContext) {
+          dependencies.dispatch({ type: "webmcp/unavailable" });
+          dependencies.dispatch({
+            type: "workflow/failed",
+            workflowId: input.workflowId,
+            reason: "webmcp_unavailable",
+          });
+          return boundedError(
+            "webmcp_unavailable",
+            "WebMCP is unavailable in this browser.",
+          );
+        }
+
+        dependencies.dispatch({
+          type: "workflow/executing",
+          workflowId: input.workflowId,
+        });
+        const resultText = await executeTool({
+          modelContext,
+          tool: handle,
+          invokeKind: descriptor.invokeKind,
+          input: step.arguments,
+          signal,
+        });
+        const parsed = parsePassToolResult(
+          step.namespacedName,
+          parseBoundedJsonResult(parseExecuteResultText(resultText)),
+        );
+        if (!parsed) {
+          throw new Error("execution_failed");
+        }
+        results.push(parsed.result);
+        evidenceParts.push(parsed.evidence);
+      } finally {
+        releaseOperation();
       }
-      results.push(parsed.result);
-      evidenceParts.push(parsed.evidence);
     }
 
     const evidence = evidenceParts.join("; ");

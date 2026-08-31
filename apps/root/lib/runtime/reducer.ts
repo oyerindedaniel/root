@@ -127,7 +127,6 @@ export function runtimeReducer(
       return {
         ...state,
         sessionStatus: "signed-out",
-        control: "human",
         motion: { status: "idle" },
       };
     case "webmcp/available":
@@ -151,6 +150,7 @@ export function runtimeReducer(
           outcome: null,
             discoveredTools: [],
             openedBy: action.openedBy,
+            control: "human",
             lastTouchedAt: action.touchedAt,
           },
         },
@@ -286,7 +286,10 @@ export function runtimeReducer(
         ? { ...state, motion: { status: "idle" } }
         : state;
     case "control/set":
-      return { ...state, control: action.control };
+      return updateWindow(state, action.instanceId, (windowState) => ({
+        ...windowState,
+        control: action.control,
+      }));
     case "workflow/draft": {
       const windowState = state.workflow.step
         ? findProviderWindow(state, state.workflow.step.providerId)
@@ -348,7 +351,6 @@ export function runtimeReducer(
       return updateStepWindow({
         ...state,
         workflow,
-        control: "agent",
       }, (windowState) => ({ ...windowState, lifecycle: "executing" }));
     }
     case "workflow/step": {
@@ -395,7 +397,6 @@ export function runtimeReducer(
       return updateStepWindow({
         ...state,
         workflow,
-        control: "human",
       }, (windowState) => ({
           ...settleLifecycle(windowState),
           outcome: "passed",
@@ -408,7 +409,6 @@ export function runtimeReducer(
       return updateStepWindow({
         ...state,
         workflow: toFailedWorkflow(state.workflow, action.reason),
-        control: "human",
       }, (windowState) => ({
           ...windowState,
           lifecycle: windowState.placement === "stage"
@@ -445,7 +445,6 @@ export function runtimeReducer(
       return updateStepWindow({
         ...state,
         workflow,
-        control: "human",
       }, (windowState) => ({
           ...settleLifecycle(windowState),
           outcome: "cancelled",

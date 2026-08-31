@@ -153,7 +153,7 @@ describe("runtimeReducer", () => {
       workflowId: "wf_1",
     });
     expect(state.workflow.lifecycle).toBe("cancelled");
-    expect(state.control).toBe("human");
+    expect(windowState(state).control).toBe("human");
   });
 
   it("selects the current workflow step", () => {
@@ -200,7 +200,7 @@ describe("runtimeReducer", () => {
     expect(state.workflow.results).toEqual([catalogResult()]);
     expect(state.workflow.evidence).toBe('1 products for "keyboard"');
     expect(windowState(state).outcome).toBe("passed");
-    expect(state.control).toBe("human");
+    expect(windowState(state).control).toBe("human");
   });
 
   it("records a failed workflow", () => {
@@ -223,7 +223,7 @@ describe("runtimeReducer", () => {
     expect(state.workflow.lifecycle).toBe("failed");
     expect(state.workflow.failureReason).toBe("execution_failed");
     expect(windowState(state).outcome).toBe("failed");
-    expect(state.control).toBe("human");
+    expect(windowState(state).control).toBe("human");
   });
 
   it("invalidates a workflow after failed revalidation", () => {
@@ -403,6 +403,25 @@ describe("runtimeReducer", () => {
     expect(Object.keys(state.windows)).toEqual(["shop_1", "accounts_1"]);
     expect(state.windowOrder).toEqual(["accounts_1", "shop_1"]);
     expect(state.focusedInstanceId).toBe("shop_1");
+  });
+
+  it("stamps control on the leased window only", () => {
+    let state = runtimeReducer(mounted(), {
+      type: "provider/mount",
+      providerId: "accounts",
+      instanceId: "accounts_1",
+      origin: "http://localhost:3001",
+      entryUrl: "http://localhost:3001/",
+      openedBy: "human",
+      touchedAt: 2,
+    });
+    state = runtimeReducer(state, {
+      type: "control/set",
+      instanceId: "accounts_1",
+      control: "agent",
+    });
+    expect(windowState(state, "accounts_1").control).toBe("agent");
+    expect(windowState(state).control).toBe("human");
   });
 
   it("appears a new stage window through suction", () => {

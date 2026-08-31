@@ -113,7 +113,7 @@ export function RuntimeProvider({
 
   const handlesRef = useRef(new ToolHandleRegistry());
   const executionAbortRef = useRef<AbortController | null>(null);
-  const agentOperationRef = useRef(false);
+  const operationLeasesRef = useRef(new Set<string>());
   const loadWaitersRef = useRef(new Map<string, LoadWaiter>());
   const trayTargetsRef = useRef(new Map<string, TrayTarget>());
 
@@ -321,6 +321,21 @@ export function RuntimeProvider({
     [catalog, openProvider, waitForLoad],
   );
 
+  const holdWindowLease = useCallback((instanceId: string) => {
+    const release = acquireOperationLease(
+      operationLeasesRef.current,
+      instanceId,
+    );
+    if (!release) {
+      return null;
+    }
+    dispatch({ type: "control/set", instanceId, control: "agent" });
+    return () => {
+      dispatch({ type: "control/set", instanceId, control: "human" });
+      release();
+    };
+  }, []);
+
   const listProviders = useCallback(
     (): BoundedResultEnvelope<ListProvidersOutput> => {
       const output: ListProvidersOutput = {
@@ -354,28 +369,35 @@ export function RuntimeProvider({
       input: DiscoverCapabilitiesInput,
       signal: AbortSignal,
     ): Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>> => {
-      const releaseOperation = acquireOperationLease(agentOperationRef);
+      let instanceId: string;
+      try {
+        instanceId = openProvider(input.providerId, "agent");
+      } catch (error) {
+        if (error instanceof DirectoryError) {
+          return boundedError(error.code, error.message);
+        }
+        throw error;
+      }
+      const releaseOperation = holdWindowLease(instanceId);
       if (!releaseOperation) {
         return boundedError(
           "operation_in_progress",
           "Another provider operation is already in progress.",
         );
       }
-      dispatch({ type: "control/set", control: "agent" });
       try {
         return await runDiscovery(input.providerId, signal);
       } finally {
-        dispatch({ type: "control/set", control: "human" });
         releaseOperation();
       }
     },
-    [runDiscovery],
+    [holdWindowLease, openProvider, runDiscovery],
   );
 
   const testProvider = useCallback(
     (providerId: string) =>
-      runDiscovery(providerId, new AbortController().signal),
-    [runDiscovery],
+      discoverCapabilities({ providerId }, new AbortController().signal),
+    [discoverCapabilities],
   );
 
   const invokeGrantedTool = useCallback(
@@ -389,15 +411,8 @@ export function RuntimeProvider({
         dependencies: {
           catalog,
           acquireOperation: () => {
-            const release = acquireOperationLease(agentOperationRef);
-            if (!release) {
-              return null;
-            }
-            dispatch({ type: "control/set", control: "agent" });
-            return () => {
-              dispatch({ type: "control/set", control: "human" });
-              release();
-            };
+            const instanceId = openProvider(input.providerId, "agent");
+            return holdWindowLease(instanceId);
           },
           getState: () => stateRef.current,
           discover: (providerId, operationSignal) =>
@@ -408,7 +423,7 @@ export function RuntimeProvider({
         },
       });
     },
-    [catalog, runDiscovery],
+    [catalog, holdWindowLease, openProvider, runDiscovery],
   );
 
   const prepareWorkflow = useCallback((
@@ -445,14 +460,6 @@ export function RuntimeProvider({
       input: ExecuteWorkflowInput,
       signal: AbortSignal,
     ): Promise<BoundedResultEnvelope<ExecuteWorkflowOutput>> => {
-      const releaseOperation = acquireOperationLease(agentOperationRef);
-      if (!releaseOperation) {
-        return boundedError(
-          "operation_in_progress",
-          "Another provider operation is already in progress.",
-        );
-      }
-
       const combined = new AbortController();
       const onAbort = () => combined.abort();
       signal.addEventListener("abort", onAbort, { once: true });
@@ -464,6 +471,10 @@ export function RuntimeProvider({
           dependencies: {
             getState: () => stateRef.current,
             dispatch,
+            acquireOperation: (providerId) => {
+              const instanceId = openProvider(providerId, "agent");
+              return holdWindowLease(instanceId);
+            },
             discover: (providerId, operationSignal) =>
               runDiscovery(providerId, operationSignal),
             getHandle: (instanceId, origin, toolName) =>
@@ -474,10 +485,9 @@ export function RuntimeProvider({
       } finally {
         signal.removeEventListener("abort", onAbort);
         executionAbortRef.current = null;
-        releaseOperation();
       }
     },
-    [runDiscovery],
+    [holdWindowLease, openProvider, runDiscovery],
   );
 
   const cancelWorkflow = useCallback(

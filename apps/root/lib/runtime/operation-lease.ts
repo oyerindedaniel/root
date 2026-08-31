@@ -1,20 +1,19 @@
-export type OperationLease = {
-  current: boolean;
-};
+export type OperationLeases = Set<string>;
 
 export function acquireOperationLease(
-  lease: OperationLease,
+  leases: OperationLeases,
+  instanceId: string,
 ): (() => void) | null {
-  if (lease.current) {
+  if (leases.has(instanceId)) {
     return null;
   }
-  lease.current = true;
+  leases.add(instanceId);
   let released = false;
   return () => {
     if (released) {
       return;
     }
     released = true;
-    lease.current = false;
+    leases.delete(instanceId);
   };
 }

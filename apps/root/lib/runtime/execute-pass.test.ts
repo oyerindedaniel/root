@@ -165,6 +165,12 @@ function createHarness(steps: PreparedWorkflowStep[]) {
   const dependencies: ExecutePassDependencies = {
     getState: () => state,
     dispatch,
+    acquireOperation: (providerId) => {
+      events.push(`acquire:${providerId}`);
+      return () => {
+        events.push(`release:${providerId}`);
+      };
+    },
     discover,
     getHandle: (_instanceId, _origin, toolName) => {
       const step = steps.find((candidate) => candidate.toolName === toolName);
@@ -221,14 +227,18 @@ describe("executePass", () => {
     expect(result.status).toBe("success");
     expect(harness.events).toEqual([
       "workflow/executing",
+      "acquire:accounts",
       "workflow/step",
       "discover:accounts",
       "workflow/executing",
       "execute:search_customers",
+      "release:accounts",
+      "acquire:shop",
       "workflow/step",
       "discover:shop",
       "workflow/executing",
       "execute:search_products",
+      "release:shop",
       "workflow/passed",
     ]);
     expect(harness.getState().workflow.evidence).toBe(
@@ -353,6 +363,21 @@ describe("executePass", () => {
     );
     expect(harness.getState().workflow.failureReason).toBe(
       "revalidation_failed",
+    );
+  });
+
+  it("rejects a step when that window is already leased", async () => {
+    const harness = createHarness([productStep]);
+    harness.dependencies.acquireOperation = () => null;
+
+    const result = await run(harness);
+
+    expect(result.status === "error" ? result.code : null).toBe(
+      "operation_in_progress",
+    );
+    expect(harness.discover).not.toHaveBeenCalled();
+    expect(harness.getState().workflow.failureReason).toBe(
+      "operation_in_progress",
     );
   });
 

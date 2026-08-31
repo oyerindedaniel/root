@@ -36,6 +36,7 @@ export type ProviderWindow = {
   outcome: string | null;
   discoveredTools: NormalizedToolDescriptor[];
   openedBy: ControlOwner;
+  control: ControlOwner;
   lastTouchedAt: number;
 };
 
@@ -121,7 +122,6 @@ export type RuntimeState = {
   windowOrder: string[];
   focusedInstanceId: string | null;
   workflow: WorkflowState;
-  control: ControlOwner;
   motion: RuntimeMotion;
 };
 
@@ -159,7 +159,11 @@ export type RuntimeAction =
   | { type: "placement/appear"; instanceId: string }
   | { type: "motion/finish"; instanceId: string }
   | { type: "motion/cancel"; instanceId: string }
-  | { type: "control/set"; control: ControlOwner }
+  | {
+      type: "control/set";
+      instanceId: string;
+      control: ControlOwner;
+    }
   | { type: "workflow/draft" }
   | {
       type: "workflow/prepared";
@@ -216,7 +220,6 @@ export function createInitialRuntimeState(account: Account): RuntimeState {
     windowOrder: [],
     focusedInstanceId: null,
     workflow: createDraftWorkflow(),
-    control: "human",
     motion: { status: "idle" },
   };
 }
