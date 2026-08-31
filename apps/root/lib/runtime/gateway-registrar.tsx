@@ -11,6 +11,7 @@ import {
   MAX_PREPARED_WORKFLOW_STEPS,
   parseToolExecuteInput,
   prepareWorkflowInputSchema,
+  windowChromeInputSchema,
   type BoundedError,
   type BoundedResultEnvelope,
   type CancelWorkflowInput,
@@ -26,6 +27,8 @@ import {
   type ListProvidersOutput,
   type PrepareWorkflowInput,
   type PrepareWorkflowOutput,
+  type WindowChromeInput,
+  type WindowChromeOutput,
 } from "@repo/contracts";
 import { useEffect, useRef } from "react";
 import type { z } from "zod";
@@ -61,6 +64,15 @@ export type GatewayHandlers = {
   inspectWorkflow: (
     input: InspectWorkflowInput,
   ) => InspectWorkflowOutput | BoundedError;
+  minimizeWindow: (
+    input: WindowChromeInput,
+  ) => BoundedResultEnvelope<WindowChromeOutput>;
+  maximizeWindow: (
+    input: WindowChromeInput,
+  ) => BoundedResultEnvelope<WindowChromeOutput>;
+  closeWindow: (
+    input: WindowChromeInput,
+  ) => BoundedResultEnvelope<WindowChromeOutput>;
 };
 
 export function GatewayRegistrar(handlers: GatewayHandlers) {
@@ -307,6 +319,99 @@ export async function registerGatewayTools(
           );
         }
         return handlersRef.current.inspectWorkflow(parsed);
+      },
+    },
+    { signal },
+  );
+
+  await context.registerTool(
+    {
+      name: "minimize_window",
+      title: "Minimize window",
+      description:
+        "Minimize an open provider window to the Dock. Same as the yellow traffic light. The document stays mounted.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          providerId: {
+            type: "string",
+            description: "Configured provider ID from list_providers.",
+          },
+        },
+        required: ["providerId"],
+      },
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute: async (input) => {
+        const parsed = parseIngress(windowChromeInputSchema, input);
+        if (!parsed) {
+          return boundedError(
+            "invalid_arguments",
+            "minimize_window requires a configured providerId.",
+          );
+        }
+        return handlersRef.current.minimizeWindow(parsed);
+      },
+    },
+    { signal },
+  );
+
+  await context.registerTool(
+    {
+      name: "maximize_window",
+      title: "Maximize window",
+      description:
+        "Fill the canvas with an open provider window. Same as the green traffic light. Does not toggle back. Not a second fullscreen tool.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          providerId: {
+            type: "string",
+            description: "Configured provider ID from list_providers.",
+          },
+        },
+        required: ["providerId"],
+      },
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute: async (input) => {
+        const parsed = parseIngress(windowChromeInputSchema, input);
+        if (!parsed) {
+          return boundedError(
+            "invalid_arguments",
+            "maximize_window requires a configured providerId.",
+          );
+        }
+        return handlersRef.current.maximizeWindow(parsed);
+      },
+    },
+    { signal },
+  );
+
+  await context.registerTool(
+    {
+      name: "close_window",
+      title: "Close window",
+      description:
+        "Close an open provider window. Same as the red traffic light. Not the default after a task; use only when the human asked for cleanup or the window is disposable.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          providerId: {
+            type: "string",
+            description: "Configured provider ID from list_providers.",
+          },
+        },
+        required: ["providerId"],
+      },
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute: async (input) => {
+        const parsed = parseIngress(windowChromeInputSchema, input);
+        if (!parsed) {
+          return boundedError(
+            "invalid_arguments",
+            "close_window requires a configured providerId.",
+          );
+        }
+        return handlersRef.current.closeWindow(parsed);
       },
     },
     { signal },

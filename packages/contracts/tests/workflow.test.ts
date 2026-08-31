@@ -425,6 +425,9 @@ describe("gateway envelopes", () => {
     expect(
       boundedError("operation_in_progress", "Another operation is active.").code,
     ).toBe("operation_in_progress");
+    expect(boundedError("window_not_found", "No open window.").code).toBe(
+      "window_not_found",
+    );
     expect(() => boundedError("not_a_code" as never, "Nope.")).toThrow();
   });
 

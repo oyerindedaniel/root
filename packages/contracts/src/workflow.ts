@@ -278,6 +278,18 @@ export const inspectWorkflowOutputSchema = z.object({
 
 export type InspectWorkflowOutput = z.infer<typeof inspectWorkflowOutputSchema>;
 
+export const windowChromeInputSchema = z.strictObject({
+  providerId: providerIdSchema,
+});
+
+export type WindowChromeInput = z.infer<typeof windowChromeInputSchema>;
+
+export const windowChromeOutputSchema = z.strictObject({
+  providerId: providerIdSchema,
+});
+
+export type WindowChromeOutput = z.infer<typeof windowChromeOutputSchema>;
+
 const providerSummaryBase = {
   providerId: providerIdSchema,
   label: z.string().min(1).max(80),
@@ -317,18 +329,6 @@ export const listProvidersOutputSchema = z.strictObject({
 
 export type ListProvidersOutput = z.infer<typeof listProvidersOutputSchema>;
 
-export const gatewayToolNameSchema = z.enum([
-  "list_providers",
-  "discover_capabilities",
-  "invoke_granted_tool",
-  "prepare_workflow",
-  "execute_workflow",
-  "cancel_workflow",
-  "inspect_workflow",
-]);
-
-export type GatewayToolName = z.infer<typeof gatewayToolNameSchema>;
-
 export const ROOT_GATEWAY_TOOLS = [
   "list_providers",
   "discover_capabilities",
@@ -337,7 +337,14 @@ export const ROOT_GATEWAY_TOOLS = [
   "execute_workflow",
   "cancel_workflow",
   "inspect_workflow",
-] as const satisfies readonly GatewayToolName[];
+  "minimize_window",
+  "maximize_window",
+  "close_window",
+] as const;
+
+export const gatewayToolNameSchema = z.enum(ROOT_GATEWAY_TOOLS);
+
+export type GatewayToolName = z.infer<typeof gatewayToolNameSchema>;
 
 export const trustedProviderEntrySchema = z.object({
   providerId: providerIdSchema,

@@ -102,6 +102,7 @@ export const gatewayErrorCodeSchema = z.enum([
   "entry_origin_mismatch",
   "unknown_provider",
   "stale_handle",
+  "window_not_found",
 ]);
 
 export type GatewayErrorCode = z.infer<typeof gatewayErrorCodeSchema>;

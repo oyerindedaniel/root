@@ -20,6 +20,8 @@ import {
   type PrepareWorkflowInput,
   type PrepareWorkflowOutput,
   type ProviderPlacement,
+  type WindowChromeInput,
+  type WindowChromeOutput,
 } from "@repo/contracts";
 import { useReducedMotion } from "motion/react";
 import {
@@ -40,7 +42,7 @@ import {
   animatePlacement,
   clearPlacementPresentation,
 } from "@/lib/window/placement-motion";
-import { createWindowSession } from "@/lib/window/session";
+import { createWindowSession, type WindowSession } from "@/lib/window/session";
 import {
   DirectoryError,
   getBuiltinProvider,
@@ -65,6 +67,7 @@ import {
 import { acquireOperationLease } from "@/lib/runtime/operation-lease";
 import { prepareWorkflow as bindWorkflow } from "@/lib/runtime/prepare";
 import { runtimeReducer } from "@/lib/runtime/reducer";
+import { resolveOpenWindow } from "@/lib/runtime/window-chrome";
 import {
   RuntimeContextProvider,
   type RuntimeApi,
@@ -120,6 +123,8 @@ export function RuntimeProvider({
   const executionAbortRef = useRef<AbortController | null>(null);
   const operationLeasesRef = useRef(new Set<string>());
   const instanceAbortsRef = useRef(new Map<string, AbortController>());
+  const windowSessionsRef = useRef(new Map<string, WindowSession>());
+  const pendingFillRef = useRef(new Set<string>());
   const loadWaitersRef = useRef(new Map<string, LoadWaiter>());
   const trayTargetsRef = useRef(new Map<string, TrayTarget>());
 
@@ -655,6 +660,90 @@ export function RuntimeProvider({
   const cancelPlacement = useCallback((instanceId: string) => {
     dispatch({ type: "motion/cancel", instanceId });
   }, []);
+  const bindWindowSession = useCallback(
+    (instanceId: string, session: WindowSession) => {
+      windowSessionsRef.current.set(instanceId, session);
+    },
+    [],
+  );
+  const unbindWindowSession = useCallback((instanceId: string) => {
+    windowSessionsRef.current.delete(instanceId);
+    pendingFillRef.current.delete(instanceId);
+  }, []);
+  const takePendingFill = useCallback((instanceId: string) => {
+    return pendingFillRef.current.delete(instanceId);
+  }, []);
+
+  const minimizeWindow = useCallback(
+    (
+      input: WindowChromeInput,
+    ): BoundedResultEnvelope<WindowChromeOutput> => {
+      const resolved = resolveOpenWindow(
+        catalog,
+        stateRef.current,
+        input.providerId,
+      );
+      if ("status" in resolved) {
+        return resolved;
+      }
+      if (resolved.placement !== "tray") {
+        requestPlacement(resolved.instanceId, "tray");
+        if (windowSessionsRef.current.get(resolved.instanceId)?.isMaximized()) {
+          finishPlacement(resolved.instanceId);
+        }
+      }
+      return boundedSuccess({ providerId: resolved.providerId });
+    },
+    [catalog, finishPlacement, requestPlacement],
+  );
+
+  const maximizeWindow = useCallback(
+    (
+      input: WindowChromeInput,
+    ): BoundedResultEnvelope<WindowChromeOutput> => {
+      const resolved = resolveOpenWindow(
+        catalog,
+        stateRef.current,
+        input.providerId,
+      );
+      if ("status" in resolved) {
+        return resolved;
+      }
+      const session = windowSessionsRef.current.get(resolved.instanceId);
+      if (!session?.isMaximized()) {
+        if (resolved.placement === "tray") {
+          pendingFillRef.current.add(resolved.instanceId);
+          requestPlacement(resolved.instanceId, "stage");
+        } else {
+          session?.fillWorkArea();
+        }
+      }
+      return boundedSuccess({ providerId: resolved.providerId });
+    },
+    [catalog, requestPlacement],
+  );
+
+  const closeWindow = useCallback(
+    (
+      input: WindowChromeInput,
+    ): BoundedResultEnvelope<WindowChromeOutput> => {
+      const resolved = resolveOpenWindow(
+        catalog,
+        stateRef.current,
+        input.providerId,
+      );
+      if ("status" in resolved) {
+        return resolved;
+      }
+      if (windowSessionsRef.current.get(resolved.instanceId)?.isMaximized()) {
+        closeProvider(resolved.instanceId);
+      } else {
+        requestPlacement(resolved.instanceId, "tray", "unmount");
+      }
+      return boundedSuccess({ providerId: resolved.providerId });
+    },
+    [catalog, closeProvider, requestPlacement],
+  );
 
   const api = useMemo<RuntimeApi>(
     () => ({
@@ -710,6 +799,9 @@ export function RuntimeProvider({
                 onMotionCancel={cancelPlacement}
                 onClose={closeProvider}
                 onTakeControl={takeControl}
+                onSessionBind={bindWindowSession}
+                onSessionUnbind={unbindWindowSession}
+                onTakePendingFill={takePendingFill}
               />
             ) : null;
           })}
@@ -724,6 +816,9 @@ export function RuntimeProvider({
         executeWorkflow={executeWorkflow}
         cancelWorkflow={cancelWorkflow}
         inspectWorkflow={inspectWorkflow}
+        minimizeWindow={minimizeWindow}
+        maximizeWindow={maximizeWindow}
+        closeWindow={closeWindow}
       />
       {!sessionEnded ? (
         <SessionWatcher account={account} onSessionEnded={onSessionEnded} />
@@ -747,6 +842,9 @@ function ProviderWindowHost({
   onMotionCancel,
   onClose,
   onTakeControl,
+  onSessionBind,
+  onSessionUnbind,
+  onTakePendingFill,
 }: {
   windowState: ProviderWindow;
   catalog: ProviderCatalog;
@@ -766,6 +864,9 @@ function ProviderWindowHost({
   onMotionCancel: (instanceId: string) => void;
   onClose: (instanceId: string) => void;
   onTakeControl: (instanceId: string) => void;
+  onSessionBind: (instanceId: string, session: WindowSession) => void;
+  onSessionUnbind: (instanceId: string) => void;
+  onTakePendingFill: (instanceId: string) => boolean;
 }) {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -812,13 +913,21 @@ function ProviderWindowHost({
       } else {
         windowSession.openStage();
       }
+      if (
+        onTakePendingFill(windowState.instanceId) &&
+        !windowSession.isMaximized()
+      ) {
+        windowSession.fillWorkArea();
+      }
       surface.inert = false;
     }
     previousPlacementRef.current = windowState.placement;
   }, [
+    onTakePendingFill,
     placementMotion,
     stageSlotRef,
     windowSession,
+    windowState.instanceId,
     windowState.placement,
     workspaceRef,
   ]);
@@ -940,6 +1049,16 @@ function ProviderWindowHost({
     windowSession,
     windowState.instanceId,
     windowState.providerId,
+  ]);
+
+  useIsomorphicLayoutEffect(() => {
+    onSessionBind(windowState.instanceId, windowSession);
+    return () => onSessionUnbind(windowState.instanceId);
+  }, [
+    onSessionBind,
+    onSessionUnbind,
+    windowSession,
+    windowState.instanceId,
   ]);
 
   useEffect(() => () => windowSession.unbind(), [windowSession]);

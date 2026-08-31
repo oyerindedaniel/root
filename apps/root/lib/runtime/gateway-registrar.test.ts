@@ -69,11 +69,17 @@ function handlers(): GatewayHandlers {
       boundedError("workflow_not_found", "Not used in this test."),
     inspectWorkflow: () =>
       boundedError("workflow_not_found", "Not used in this test."),
+    minimizeWindow: () =>
+      boundedError("window_not_found", "Not used in this test."),
+    maximizeWindow: () =>
+      boundedError("window_not_found", "Not used in this test."),
+    closeWindow: () =>
+      boundedError("window_not_found", "Not used in this test."),
   };
 }
 
 describe("registerGatewayTools", () => {
-  it("registers all seven gateway tools with the registrar signal", async () => {
+  it("registers all ten gateway tools with the registrar signal", async () => {
     const registrationSignals: Array<AbortSignal | undefined> = [];
     const tools = setup(registrationSignals);
     const controller = new AbortController();
@@ -88,9 +94,12 @@ describe("registerGatewayTools", () => {
       "execute_workflow",
       "cancel_workflow",
       "inspect_workflow",
+      "minimize_window",
+      "maximize_window",
+      "close_window",
     ]);
     expect(registrationSignals).toEqual(
-      Array.from({ length: 7 }, () => controller.signal),
+      Array.from({ length: 10 }, () => controller.signal),
     );
   });
 
@@ -143,7 +152,7 @@ describe("registerGatewayTools", () => {
     );
   });
 
-  it("routes invoke, prepare, execute, cancel, and inspect inputs", async () => {
+  it("routes invoke, prepare, execute, cancel, inspect, and window chrome inputs", async () => {
     const tools = setup();
     const gatewayHandlers = handlers();
     gatewayHandlers.prepareWorkflow = vi.fn(
@@ -157,6 +166,9 @@ describe("registerGatewayTools", () => {
     gatewayHandlers.invokeGrantedTool = vi.fn(
       gatewayHandlers.invokeGrantedTool,
     );
+    gatewayHandlers.minimizeWindow = vi.fn(gatewayHandlers.minimizeWindow);
+    gatewayHandlers.maximizeWindow = vi.fn(gatewayHandlers.maximizeWindow);
+    gatewayHandlers.closeWindow = vi.fn(gatewayHandlers.closeWindow);
     await registerGatewayTools(new AbortController().signal, {
       current: gatewayHandlers,
     });
@@ -195,6 +207,15 @@ describe("registerGatewayTools", () => {
     await tools
       .find((tool) => tool.name === "inspect_workflow")
       ?.execute({ workflowId: "wf_1" }, { signal: operationSignal });
+    await tools
+      .find((tool) => tool.name === "minimize_window")
+      ?.execute({ providerId: "shop" }, { signal: operationSignal });
+    await tools
+      .find((tool) => tool.name === "maximize_window")
+      ?.execute({ providerId: "shop" }, { signal: operationSignal });
+    await tools
+      .find((tool) => tool.name === "close_window")
+      ?.execute({ providerId: "shop" }, { signal: operationSignal });
 
     expect(gatewayHandlers.prepareWorkflow).toHaveBeenCalledWith({
       steps: [
@@ -222,6 +243,15 @@ describe("registerGatewayTools", () => {
     });
     expect(gatewayHandlers.inspectWorkflow).toHaveBeenCalledWith({
       workflowId: "wf_1",
+    });
+    expect(gatewayHandlers.minimizeWindow).toHaveBeenCalledWith({
+      providerId: "shop",
+    });
+    expect(gatewayHandlers.maximizeWindow).toHaveBeenCalledWith({
+      providerId: "shop",
+    });
+    expect(gatewayHandlers.closeWindow).toHaveBeenCalledWith({
+      providerId: "shop",
     });
   });
 
@@ -253,6 +283,9 @@ describe("registerGatewayTools", () => {
     ["execute_workflow", { workflowId: "wf_1", extra: true }],
     ["cancel_workflow", { workflowId: "wf_1", extra: true }],
     ["inspect_workflow", { workflowId: "wf_1", extra: true }],
+    ["minimize_window", { providerId: "shop", extra: true }],
+    ["maximize_window", { providerId: "shop", extra: true }],
+    ["close_window", { providerId: "shop", extra: true }],
   ])("rejects unknown ingress keys for %s", async (name, input) => {
     const tools = setup();
     await registerGatewayTools(new AbortController().signal, {
@@ -277,6 +310,9 @@ describe("registerGatewayTools", () => {
     "execute_workflow",
     "cancel_workflow",
     "inspect_workflow",
+    "minimize_window",
+    "maximize_window",
+    "close_window",
   ])("bounds malformed JSON ingress for %s", async (name) => {
     const tools = setup();
     await registerGatewayTools(new AbortController().signal, {
