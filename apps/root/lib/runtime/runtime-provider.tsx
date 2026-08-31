@@ -769,10 +769,52 @@ function ProviderWindowHost({
   }, [stackIndex, windowSession]);
 
   useIsomorphicLayoutEffect(() => {
+    applyLayout();
+    const workspace = workspaceRef.current;
+    if (!workspace) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (layoutRafRef.current) {
+        return;
+      }
+      layoutRafRef.current = requestAnimationFrame(() => {
+        layoutRafRef.current = 0;
+        if (placementMotion) {
+          return;
+        }
+        if (windowState.placement === "tray") {
+          applyLayout();
+        } else {
+          windowSession.relayout();
+        }
+      });
+    });
+    observer.observe(workspace);
+    if (stageSlotRef.current) {
+      observer.observe(stageSlotRef.current);
+    }
+    return () => {
+      observer.disconnect();
+      if (layoutRafRef.current) {
+        cancelAnimationFrame(layoutRafRef.current);
+        layoutRafRef.current = 0;
+      }
+    };
+  }, [
+    applyLayout,
+    placementMotion,
+    stageSlotRef,
+    windowSession,
+    windowState.placement,
+    workspaceRef,
+  ]);
+
+  useIsomorphicLayoutEffect(() => {
     if (!placementMotion) {
       return;
     }
-    if (reduceMotion) {
+    if (reduceMotion || windowSession.isMaximized()) {
       onMotionFinish(windowState.instanceId);
       if (
         placementMotion.placement === "stage" &&
@@ -782,11 +824,10 @@ function ProviderWindowHost({
       }
       return;
     }
-    const workspace = workspaceRef.current;
     const surface = surfaceRef.current;
-    const workArea = stageSlotRef.current;
+    const workspace = workspaceRef.current;
     const trayTarget = getTrayTarget(windowState.providerId);
-    if (!workspace || !surface || !workArea || !trayTarget?.slot) {
+    if (!surface || !workspace || !trayTarget?.slot) {
       if (placementMotion.settle === "unmount") {
         onClose(windowState.instanceId);
       } else {
@@ -794,12 +835,6 @@ function ProviderWindowHost({
       }
       return;
     }
-    windowSession.bind({
-      window: surface,
-      workspace,
-      workArea,
-      iframe: iframeRef.current,
-    });
     clearPlacementPresentation(surface);
     if (placementMotion.placement === "tray") {
       windowSession.snapshotStage();
@@ -846,50 +881,6 @@ function ProviderWindowHost({
     windowSession,
     windowState.instanceId,
     windowState.providerId,
-    workspaceRef,
-    stageSlotRef,
-  ]);
-
-  useIsomorphicLayoutEffect(() => {
-    applyLayout();
-    const workspace = workspaceRef.current;
-    if (!workspace) {
-      return;
-    }
-    const observer = new ResizeObserver(() => {
-      if (layoutRafRef.current) {
-        return;
-      }
-      layoutRafRef.current = requestAnimationFrame(() => {
-        layoutRafRef.current = 0;
-        if (placementMotion) {
-          return;
-        }
-        if (windowState.placement === "tray") {
-          applyLayout();
-        } else {
-          windowSession.relayout();
-        }
-      });
-    });
-    observer.observe(workspace);
-    if (stageSlotRef.current) {
-      observer.observe(stageSlotRef.current);
-    }
-    return () => {
-      observer.disconnect();
-      if (layoutRafRef.current) {
-        cancelAnimationFrame(layoutRafRef.current);
-        layoutRafRef.current = 0;
-      }
-    };
-  }, [
-    applyLayout,
-    placementMotion,
-    stageSlotRef,
-    windowSession,
-    windowState.placement,
-    workspaceRef,
   ]);
 
   useEffect(() => () => windowSession.unbind(), [windowSession]);
@@ -915,6 +906,9 @@ function ProviderWindowHost({
       }}
       onMinimize={() => {
         onPlacement(windowState.instanceId, "tray");
+        if (windowSession.isMaximized()) {
+          onMotionFinish(windowState.instanceId);
+        }
         getTrayTarget(windowState.providerId)?.restoreButton?.focus();
       }}
     >
