@@ -1,0 +1,92 @@
+export const TOOL_PRESENT_FILL_MS = 32;
+export const TOOL_PRESENT_FILL_REF_CHARS = 8;
+export const TOOL_PRESENT_FILL_MIN_MS = 8;
+
+export function fillPaceMs(length: number) {
+  if (length <= TOOL_PRESENT_FILL_REF_CHARS) {
+    return TOOL_PRESENT_FILL_MS;
+  }
+  return Math.max(
+    TOOL_PRESENT_FILL_MIN_MS,
+    Math.round((TOOL_PRESENT_FILL_MS * TOOL_PRESENT_FILL_REF_CHARS) / length),
+  );
+}
+
+export type FillInputNode = Pick<HTMLInputElement, "dispatchEvent"> &
+  Partial<Pick<HTMLInputElement, "value">>;
+
+export type FillPresentedInput = {
+  text: string;
+  setValue: (value: string) => void;
+  input: FillInputNode | null;
+  signal?: AbortSignal;
+  instant: boolean;
+  paceMs?: number;
+};
+
+function abortError(signal?: AbortSignal) {
+  if (signal?.reason instanceof DOMException) {
+    return signal.reason;
+  }
+  return new DOMException("Aborted", "AbortError");
+}
+
+function wait(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError(signal));
+      return;
+    }
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(abortError(signal));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function writeInput(input: FillInputNode | null, value: string) {
+  if (input && "value" in input) {
+    input.value = value;
+  }
+}
+
+function dispatchInput(input: FillInputNode | null, data: string) {
+  if (!input) {
+    return;
+  }
+  const event =
+    typeof InputEvent === "function"
+      ? new InputEvent("input", {
+          bubbles: true,
+          data,
+          inputType: "insertText",
+        })
+      : new Event("input", { bubbles: true });
+  input.dispatchEvent(event);
+}
+
+export async function fillPresentedInput(options: FillPresentedInput) {
+  const paceMs = options.paceMs ?? fillPaceMs(options.text.length);
+  options.signal?.throwIfAborted();
+  if (options.instant || options.text.length <= 1) {
+    writeInput(options.input, options.text);
+    options.setValue(options.text);
+    dispatchInput(options.input, options.text.slice(-1));
+    return;
+  }
+  for (let index = 1; index <= options.text.length; index += 1) {
+    options.signal?.throwIfAborted();
+    const prefix = options.text.slice(0, index);
+    writeInput(options.input, prefix);
+    options.setValue(prefix);
+    dispatchInput(options.input, prefix.slice(-1));
+    if (index < options.text.length) {
+      await wait(paceMs, options.signal);
+    }
+  }
+}

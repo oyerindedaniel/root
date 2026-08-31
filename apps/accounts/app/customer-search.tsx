@@ -5,6 +5,7 @@ import { useTRPCClient } from "@repo/api-client";
 import { requirePublicEnv } from "@repo/api-client/env";
 import {
   SEARCH_CUSTOMERS_INPUT_SCHEMA,
+  createDocumentVisibilityGate,
   parseToolExecuteInput,
   searchCustomersInputSchema,
   searchCustomersOutputSchema,
@@ -14,7 +15,9 @@ import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
-import { useCallback, useEffect, useState } from "react";
+import { SearchHit } from "@repo/ui/search-hit";
+import { useToolPresent } from "@repo/ui/tool-present";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type SearchStatus = "idle" | "pending" | "success" | "error";
 
@@ -29,6 +32,12 @@ export function CustomerSearch() {
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const queryInputRef = useRef<HTMLInputElement>(null);
+  const visibilityGateRef = useRef(createDocumentVisibilityGate());
+  const present = useToolPresent({
+    rootOrigin,
+    gate: visibilityGateRef.current,
+  });
 
   const runSearch = useCallback(
     async (nextQuery: string, signal?: AbortSignal) => {
@@ -36,6 +45,7 @@ export function CustomerSearch() {
       setQuery(parsed.query);
       setStatus("pending");
       setError(null);
+      present.clear();
       try {
         const result = searchCustomersOutputSchema.parse(
           await trpcClient.v1.accounts.searchCustomers.query(parsed, {
@@ -58,7 +68,7 @@ export function CustomerSearch() {
         throw caught;
       }
     },
-    [trpcClient],
+    [present.clear, trpcClient],
   );
 
   useEffect(() => {
@@ -82,7 +92,22 @@ export function CustomerSearch() {
           const parsed = searchCustomersInputSchema.parse(
             parseToolExecuteInput(input),
           );
-          return runSearch(parsed.query, options.signal);
+          present.arm();
+          try {
+            await present.fill({
+              text: parsed.query,
+              setValue: setQuery,
+              input: queryInputRef.current,
+              signal: options.signal,
+            });
+            options.signal?.throwIfAborted();
+            const result = await runSearch(parsed.query, options.signal);
+            present.commit(result.customers[0]?.id ?? null);
+            return result;
+          } catch (caught) {
+            present.commit(null);
+            throw caught;
+          }
         },
       },
       {
@@ -91,7 +116,7 @@ export function CustomerSearch() {
       },
     );
     return () => controller.abort();
-  }, [runSearch]);
+  }, [present.arm, present.commit, present.fill, runSearch]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
@@ -111,6 +136,7 @@ export function CustomerSearch() {
         <Label>
           Query
           <Input
+            ref={queryInputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             name="query"
@@ -142,16 +168,17 @@ export function CustomerSearch() {
         <p className="text-base text-muted-foreground">No matching customers.</p>
       ) : null}
       <ul className="flex flex-col gap-3">
-        {customers.map((customer) => (
-          <li
+        {customers.map((customer, index) => (
+          <SearchHit
             key={customer.id}
-            className="rounded-lg border border-border p-4"
+            ref={index === 0 ? present.firstHitRef : undefined}
+            revealed={present.hitId === customer.id}
           >
             <p className="text-base font-medium">{customer.name}</p>
             <p className="mt-1 font-mono text-base text-muted-foreground">
               {customer.email}
             </p>
-          </li>
+          </SearchHit>
         ))}
       </ul>
     </main>

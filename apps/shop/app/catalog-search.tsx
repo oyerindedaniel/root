@@ -5,6 +5,7 @@ import { useTRPCClient } from "@repo/api-client";
 import { requirePublicEnv } from "@repo/api-client/env";
 import {
   SEARCH_PRODUCTS_INPUT_SCHEMA,
+  createDocumentVisibilityGate,
   parseToolExecuteInput,
   searchProductsInputSchema,
   searchProductsOutputSchema,
@@ -14,7 +15,9 @@ import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
-import { useCallback, useEffect, useState } from "react";
+import { SearchHit } from "@repo/ui/search-hit";
+import { useToolPresent } from "@repo/ui/tool-present";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type SearchStatus = "idle" | "pending" | "success" | "error";
 
@@ -29,6 +32,12 @@ export function CatalogSearch() {
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [products, setProducts] = useState<ShopProduct[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const queryInputRef = useRef<HTMLInputElement>(null);
+  const visibilityGateRef = useRef(createDocumentVisibilityGate());
+  const present = useToolPresent({
+    rootOrigin,
+    gate: visibilityGateRef.current,
+  });
 
   const runSearch = useCallback(
     async (nextQuery: string, signal?: AbortSignal) => {
@@ -36,6 +45,7 @@ export function CatalogSearch() {
       setQuery(parsed.query);
       setStatus("pending");
       setError(null);
+      present.clear();
       try {
         const result = searchProductsOutputSchema.parse(
           await trpcClient.v1.shop.searchProducts.query(parsed, { signal }),
@@ -56,7 +66,7 @@ export function CatalogSearch() {
         throw caught;
       }
     },
-    [trpcClient],
+    [present.clear, trpcClient],
   );
 
   useEffect(() => {
@@ -80,7 +90,22 @@ export function CatalogSearch() {
           const parsed = searchProductsInputSchema.parse(
             parseToolExecuteInput(input),
           );
-          return runSearch(parsed.query, options.signal);
+          present.arm();
+          try {
+            await present.fill({
+              text: parsed.query,
+              setValue: setQuery,
+              input: queryInputRef.current,
+              signal: options.signal,
+            });
+            options.signal?.throwIfAborted();
+            const result = await runSearch(parsed.query, options.signal);
+            present.commit(result.products[0]?.id ?? null);
+            return result;
+          } catch (caught) {
+            present.commit(null);
+            throw caught;
+          }
         },
       },
       {
@@ -89,7 +114,7 @@ export function CatalogSearch() {
       },
     );
     return () => controller.abort();
-  }, [runSearch]);
+  }, [present.arm, present.commit, present.fill, runSearch]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
@@ -109,6 +134,7 @@ export function CatalogSearch() {
         <Label>
           Query
           <Input
+            ref={queryInputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             name="query"
@@ -140,17 +166,18 @@ export function CatalogSearch() {
         <p className="text-base text-muted-foreground">No matching products.</p>
       ) : null}
       <ul className="flex flex-col gap-3">
-        {products.map((product) => (
-          <li
+        {products.map((product, index) => (
+          <SearchHit
             key={product.id}
-            className="rounded-lg border border-border p-4"
+            ref={index === 0 ? present.firstHitRef : undefined}
+            revealed={present.hitId === product.id}
           >
             <p className="text-base font-medium">{product.name}</p>
             <p className="mt-1 text-base text-muted-foreground">
               {product.description}
             </p>
             <p className="mt-2 font-mono text-base">${product.priceUsd}</p>
-          </li>
+          </SearchHit>
         ))}
       </ul>
     </main>

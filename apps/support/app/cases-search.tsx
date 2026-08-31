@@ -5,6 +5,7 @@ import { useTRPCClient } from "@repo/api-client";
 import { requirePublicEnv } from "@repo/api-client/env";
 import {
   SEARCH_CASES_INPUT_SCHEMA,
+  createDocumentVisibilityGate,
   parseToolExecuteInput,
   searchCasesInputSchema,
   searchCasesOutputSchema,
@@ -14,7 +15,9 @@ import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
-import { useCallback, useEffect, useState } from "react";
+import { SearchHit } from "@repo/ui/search-hit";
+import { useToolPresent } from "@repo/ui/tool-present";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type SearchStatus = "idle" | "pending" | "success" | "error";
 
@@ -29,6 +32,12 @@ export function CasesSearch() {
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [cases, setCases] = useState<SupportCase[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const queryInputRef = useRef<HTMLInputElement>(null);
+  const visibilityGateRef = useRef(createDocumentVisibilityGate());
+  const present = useToolPresent({
+    rootOrigin,
+    gate: visibilityGateRef.current,
+  });
 
   const runSearch = useCallback(
     async (nextQuery: string, signal?: AbortSignal) => {
@@ -36,6 +45,7 @@ export function CasesSearch() {
       setQuery(parsed.query);
       setStatus("pending");
       setError(null);
+      present.clear();
       try {
         const result = searchCasesOutputSchema.parse(
           await trpcClient.v1.support.searchCases.query(parsed, { signal }),
@@ -56,7 +66,7 @@ export function CasesSearch() {
         throw caught;
       }
     },
-    [trpcClient],
+    [present.clear, trpcClient],
   );
 
   useEffect(() => {
@@ -80,7 +90,22 @@ export function CasesSearch() {
           const parsed = searchCasesInputSchema.parse(
             parseToolExecuteInput(input),
           );
-          return runSearch(parsed.query, options.signal);
+          present.arm();
+          try {
+            await present.fill({
+              text: parsed.query,
+              setValue: setQuery,
+              input: queryInputRef.current,
+              signal: options.signal,
+            });
+            options.signal?.throwIfAborted();
+            const result = await runSearch(parsed.query, options.signal);
+            present.commit(result.cases[0]?.id ?? null);
+            return result;
+          } catch (caught) {
+            present.commit(null);
+            throw caught;
+          }
         },
       },
       {
@@ -89,7 +114,7 @@ export function CasesSearch() {
       },
     );
     return () => controller.abort();
-  }, [runSearch]);
+  }, [present.arm, present.commit, present.fill, runSearch]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
@@ -109,6 +134,7 @@ export function CasesSearch() {
         <Label>
           Query
           <Input
+            ref={queryInputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             name="query"
@@ -140,10 +166,11 @@ export function CasesSearch() {
         <p className="text-base text-muted-foreground">No matching cases.</p>
       ) : null}
       <ul className="flex flex-col gap-3">
-        {cases.map((supportCase) => (
-          <li
+        {cases.map((supportCase, index) => (
+          <SearchHit
             key={supportCase.id}
-            className="rounded-lg border border-border p-4"
+            ref={index === 0 ? present.firstHitRef : undefined}
+            revealed={present.hitId === supportCase.id}
           >
             <p className="text-base font-medium">{supportCase.title}</p>
             <p className="mt-1 text-base text-muted-foreground">
@@ -154,7 +181,7 @@ export function CasesSearch() {
             </p>
             <p className="mt-2 font-mono text-base">{supportCase.orderRef}</p>
             <p className="mt-2 text-base capitalize">{supportCase.status}</p>
-          </li>
+          </SearchHit>
         ))}
       </ul>
     </main>

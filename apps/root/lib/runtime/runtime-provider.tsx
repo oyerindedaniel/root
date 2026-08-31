@@ -3,6 +3,7 @@
 import {
   boundedError,
   boundedSuccess,
+  documentVisibilityMessage,
   GatewayError,
   type Account,
   type BoundedError,
@@ -108,6 +109,21 @@ type TrayTarget = {
   slot: HTMLSpanElement | null;
   restoreButton: HTMLButtonElement | null;
 };
+
+function postDocumentVisibility(
+  frame: HTMLIFrameElement | null,
+  origin: string,
+  placement: ProviderPlacement,
+) {
+  const contentWindow = frame?.contentWindow;
+  if (!contentWindow) {
+    return;
+  }
+  contentWindow.postMessage(
+    documentVisibilityMessage(placement === "stage"),
+    origin,
+  );
+}
 
 export function RuntimeProvider({
   account,
@@ -1130,6 +1146,14 @@ function ProviderWindowHost({
 
   useEffect(() => () => windowSession.unbind(), [windowSession]);
 
+  useEffect(() => {
+    postDocumentVisibility(
+      iframeRef.current,
+      windowState.origin,
+      windowState.placement,
+    );
+  }, [windowState.origin, windowState.placement]);
+
   return (
     <AppWindow.Root
       providerId={windowState.providerId}
@@ -1166,7 +1190,14 @@ function ProviderWindowHost({
         title={provider.label}
         className="size-full border-0"
         onFocus={() => onFocus(windowState.instanceId)}
-        onLoad={() => onLoad(windowState.instanceId)}
+        onLoad={() => {
+          postDocumentVisibility(
+            iframeRef.current,
+            windowState.origin,
+            windowState.placement,
+          );
+          onLoad(windowState.instanceId);
+        }}
       />
     </AppWindow.Root>
   );
