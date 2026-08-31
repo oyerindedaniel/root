@@ -20,7 +20,10 @@ import {
 } from "@/lib/providers/catalog";
 import { useProviderLibrary } from "@/lib/providers/provider-library";
 import { useRuntime } from "@/lib/runtime/runtime-context";
-import type { RuntimeState } from "@/lib/runtime/state";
+import {
+  focusedProviderWindow,
+  type RuntimeState,
+} from "@/lib/runtime/state";
 import {
   cornerAnchors,
   DEFAULT_WORKFLOW_CORNER,
@@ -69,6 +72,7 @@ export function WorkflowStatus() {
   const dragOffset = useRef(0);
   const dragging = useRef(false);
   const hadLabel = useRef(false);
+  const providerWindow = focusedProviderWindow(state);
   const { running, failed } = indicatorActivity(state, issueHidden);
   const nextLabel = pillLabel(state, catalog, running, failed);
   const [content, setContent] = useState<{
@@ -140,8 +144,8 @@ export function WorkflowStatus() {
   }, [
     state.workflow.lifecycle,
     state.workflow.failureReason,
-    state.provider.lifecycle,
-    state.provider.failureReason,
+    providerWindow?.lifecycle,
+    providerWindow?.failureReason,
   ]);
 
   useEffect(() => {
@@ -382,15 +386,17 @@ export function WorkflowStatus() {
 }
 
 function indicatorActivity(state: RuntimeState, issueHidden: boolean) {
-  const provider = state.provider.lifecycle;
+  const provider = focusedProviderWindow(state);
   const workflow = state.workflow.lifecycle;
   return {
     running:
       workflow === "executing" ||
-      provider === "mounting" ||
-      provider === "discovering" ||
-      provider === "executing",
-    failed: !issueHidden && (workflow === "failed" || provider === "failed"),
+      provider?.lifecycle === "mounting" ||
+      provider?.lifecycle === "discovering" ||
+      provider?.lifecycle === "executing",
+    failed:
+      !issueHidden &&
+      (workflow === "failed" || provider?.lifecycle === "failed"),
   };
 }
 
@@ -431,11 +437,12 @@ function pillLabel(
   if (!running) {
     return null;
   }
-  const provider = currentProvider(catalog, state.provider.providerId);
-  if (state.provider.lifecycle === "mounting") {
+  const providerWindow = focusedProviderWindow(state);
+  const provider = currentProvider(catalog, providerWindow?.providerId ?? null);
+  if (providerWindow?.lifecycle === "mounting") {
     return provider ? `Opening ${provider.label}` : "Opening";
   }
-  if (state.provider.lifecycle === "discovering") {
+  if (providerWindow?.lifecycle === "discovering") {
     return provider ? `Discovering ${provider.label}` : "Discovering";
   }
   if (state.workflow.lifecycle === "executing") {
@@ -446,16 +453,17 @@ function pillLabel(
 }
 
 function inspectRows(state: RuntimeState, catalog: ProviderCatalog) {
-  const provider = currentProvider(catalog, state.provider.providerId);
+  const providerWindow = focusedProviderWindow(state);
+  const provider = currentProvider(catalog, providerWindow?.providerId ?? null);
   const query = state.workflow.step?.arguments.query ?? null;
   const rows: { label: string; value: string }[] = [
     { label: "Provider", value: provider?.label ?? "None" },
     {
       label: "App",
       value:
-        state.provider.lifecycle === "unmounted"
+        !providerWindow
           ? "Idle"
-          : titleCase(state.provider.lifecycle),
+          : titleCase(providerWindow.lifecycle),
     },
     {
       label: "Workflow",
@@ -472,7 +480,7 @@ function inspectRows(state: RuntimeState, catalog: ProviderCatalog) {
     rows.push({ label: "Result", value: state.workflow.evidence });
   }
   const issue =
-    state.workflow.failureReason ?? state.provider.failureReason;
+    state.workflow.failureReason ?? providerWindow?.failureReason;
   if (issue) {
     rows.push({ label: "Issue", value: issue });
   }

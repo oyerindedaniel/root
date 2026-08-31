@@ -29,6 +29,7 @@ export type WindowSession = {
   isMaximized: () => boolean;
   hasFrame: () => boolean;
   relayout: () => void;
+  setStackIndex: (stackIndex: number) => void;
 };
 
 function cursorFor(next: WindowGesture) {
@@ -62,6 +63,7 @@ export function createWindowSession(): WindowSession {
   let workspaceEl: HTMLElement | null = null;
   let workAreaEl: HTMLElement | null = null;
   let iframeEl: HTMLIFrameElement | null = null;
+  let stackIndex = 10;
   let frame: Frame = { left: 0, top: 0, width: 0, height: 0 };
   let stageSnapshot: Frame | null = null;
   let lastFrame: Frame | null = null;
@@ -101,7 +103,7 @@ export function createWindowSession(): WindowSession {
     if (!windowEl) {
       return;
     }
-    windowEl.style.zIndex = fullscreen ? "30" : "";
+    windowEl.style.zIndex = String(fullscreen ? 1000 + stackIndex : stackIndex);
     windowEl.style.borderRadius = fullscreen ? "0px" : "";
   }
 
@@ -220,6 +222,7 @@ export function createWindowSession(): WindowSession {
       workspaceEl = options.workspace;
       workAreaEl = options.workArea;
       iframeEl = options.iframe;
+      paintChrome();
     },
     unbind() {
       if (raf) {
@@ -388,6 +391,10 @@ export function createWindowSession(): WindowSession {
       }
       lastFrame = { ...frame };
       commit();
+    },
+    setStackIndex(nextStackIndex) {
+      stackIndex = nextStackIndex;
+      paintChrome();
     },
   };
 }

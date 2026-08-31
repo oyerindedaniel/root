@@ -56,9 +56,8 @@ export function WorkspaceShell({
 function WorkspaceDock() {
   const {
     state,
-    traySlotRef,
-    restoreButtonRef,
     activateProvider,
+    registerTrayTarget,
   } = useRuntime();
   const { catalog, preferences, pin, unpin } = useProviderLibrary();
   const reduceMotion = useReducedMotion();
@@ -67,11 +66,42 @@ function WorkspaceDock() {
   const removeCandidateRef = useRef(false);
   const cancelledRef = useRef(false);
   const dockBoundsRef = useRef<DOMRect | null>(null);
+  const traySlotsRef = useRef(new Map<string, HTMLSpanElement>());
+  const restoreButtonsRef = useRef(new Map<string, HTMLButtonElement>());
   const apps = resolveDockApps(
     catalog,
     preferences.dock,
-    state.provider.providerId,
+    Object.values(state.windows).map((windowState) => windowState.providerId),
   );
+
+  function setRestoreButton(
+    providerId: string,
+    button: HTMLButtonElement | null,
+  ) {
+    if (button) {
+      restoreButtonsRef.current.set(providerId, button);
+    } else {
+      restoreButtonsRef.current.delete(providerId);
+    }
+    registerTrayTarget(
+      providerId,
+      traySlotsRef.current.get(providerId) ?? null,
+      button,
+    );
+  }
+
+  function setTraySlot(providerId: string, slot: HTMLSpanElement | null) {
+    if (slot) {
+      traySlotsRef.current.set(providerId, slot);
+    } else {
+      traySlotsRef.current.delete(providerId);
+    }
+    registerTrayTarget(
+      providerId,
+      slot,
+      restoreButtonsRef.current.get(providerId) ?? null,
+    );
+  }
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -120,6 +150,7 @@ function WorkspaceDock() {
         ) : null}
       </AnimatePresence>
       <Dock.Root
+        locked={state.motion.status === "suction"}
         onDragOver={(event) => {
           if (event.dataTransfer.types.includes(ROOT_APP_DRAG_TYPE)) {
             event.preventDefault();
@@ -140,9 +171,10 @@ function WorkspaceDock() {
       >
         {apps.map((app, index) => {
         const reference: DockReference = { kind: "provider", id: app.id };
-        const mounted =
-          state.provider.providerId === app.id &&
-          state.provider.lifecycle !== "unmounted";
+        const providerWindow = Object.values(state.windows).find(
+          (windowState) => windowState.providerId === app.id,
+        );
+        const mounted = Boolean(providerWindow);
         return (
           <Dock.Item
             key={`${app.kind}:${app.id}`}
@@ -172,8 +204,13 @@ function WorkspaceDock() {
           >
             <DockTooltip label={app.label}>
               <Dock.Trigger
-                ref={mounted ? restoreButtonRef : undefined}
+                ref={
+                  mounted
+                    ? (button) => setRestoreButton(app.id, button)
+                    : undefined
+                }
                 aria-label={app.label}
+                data-window-placement={providerWindow?.placement}
                 draggable
                 onDragStartCapture={(event) => {
                   writeDockReference(event.dataTransfer, reference);
@@ -214,7 +251,8 @@ function WorkspaceDock() {
                 />
                 {mounted ? (
                   <span
-                    ref={traySlotRef}
+                    ref={(slot) => setTraySlot(app.id, slot)}
+                    data-tray-target={app.id}
                     className="pointer-events-none absolute inset-0 overflow-hidden rounded-[22%]"
                   />
                 ) : null}

@@ -19,7 +19,9 @@ import {
   type ListProvidersOutput,
   type PrepareWorkflowInput,
   type PrepareWorkflowOutput,
+  type ProviderPlacement,
 } from "@repo/contracts";
+import { useReducedMotion } from "motion/react";
 import {
   useCallback,
   useEffect,
@@ -31,8 +33,13 @@ import {
   type RefObject,
 } from "react";
 import { AppWindow } from "@/components/workspace/app-window";
+import { PlacementMotionDebug } from "@/components/workspace/placement-motion-debug";
 import { SignedOutState } from "@/components/workspace/signed-out-state";
-import { applyFrame, layoutFromRect } from "@/lib/window/frame";
+import { layoutFromRect } from "@/lib/window/frame";
+import {
+  animatePlacement,
+  clearPlacementPresentation,
+} from "@/lib/window/placement-motion";
 import { createWindowSession } from "@/lib/window/session";
 import {
   DirectoryError,
@@ -60,7 +67,10 @@ import {
 import { SessionWatcher } from "@/lib/runtime/session-watcher";
 import {
   createInitialRuntimeState,
-  type RuntimeState,
+  findProviderWindow,
+  type ControlOwner,
+  type ProviderWindow,
+  type RuntimeMotion,
 } from "@/lib/runtime/state";
 import { useIsomorphicLayoutEffect } from "@/lib/use-isomorphic-layout-effect";
 import { discoverTools } from "@/lib/webmcp/discover";
@@ -72,9 +82,13 @@ import {
 } from "@/lib/webmcp/normalize";
 
 type LoadWaiter = {
-  instanceId: string;
   promise: Promise<void>;
   resolve: () => void;
+};
+
+type TrayTarget = {
+  slot: HTMLSpanElement | null;
+  restoreButton: HTMLButtonElement | null;
 };
 
 export function RuntimeProvider({
@@ -100,17 +114,11 @@ export function RuntimeProvider({
   const handlesRef = useRef(new ToolHandleRegistry());
   const executionAbortRef = useRef<AbortController | null>(null);
   const agentOperationRef = useRef(false);
-  const motionAbortRef = useRef<AbortController | null>(null);
-  const loadWaiterRef = useRef<LoadWaiter | null>(null);
+  const loadWaitersRef = useRef(new Map<string, LoadWaiter>());
+  const trayTargetsRef = useRef(new Map<string, TrayTarget>());
 
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const stageSlotRef = useRef<HTMLDivElement | null>(null);
-  const traySlotRef = useRef<HTMLDivElement | null>(null);
-  const surfaceRef = useRef<HTMLDivElement | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const restoreButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [windowSession] = useState(createWindowSession);
-  const layoutRafRef = useRef(0);
   const sessionEnded = state.sessionStatus === "signed-out";
 
   const onSessionEnded = useCallback(() => {
@@ -118,104 +126,114 @@ export function RuntimeProvider({
   }, []);
 
   const waitForLoad = useCallback((instanceId: string) => {
-    const existing = loadWaiterRef.current;
-    if (existing?.instanceId === instanceId) {
+    const existing = loadWaitersRef.current.get(instanceId);
+    if (existing) {
       return existing.promise;
     }
     let resolve: () => void = () => undefined;
     const promise = new Promise<void>((res) => {
       resolve = res;
     });
-    loadWaiterRef.current = { instanceId, promise, resolve };
+    loadWaitersRef.current.set(instanceId, { promise, resolve });
     return promise;
   }, []);
 
-  const onIframeLoad = useCallback(() => {
-    const current = stateRef.current;
-    if (!current.provider.instanceId) {
-      return;
-    }
-    handlesRef.current.invalidateInstance(current.provider.instanceId);
+  const onIframeLoad = useCallback((instanceId: string) => {
+    handlesRef.current.invalidateInstance(instanceId);
     dispatch({
       type: "handles/invalidate",
-      instanceId: current.provider.instanceId,
+      instanceId,
     });
-    dispatch({ type: "provider/loaded", instanceId: current.provider.instanceId });
-    loadWaiterRef.current?.resolve();
+    dispatch({ type: "provider/loaded", instanceId });
+    loadWaitersRef.current.get(instanceId)?.resolve();
   }, []);
 
   const openProvider = useCallback(
-    (providerId: string, forceRemount = false) => {
+    (providerId: string, openedBy: ControlOwner = "human") => {
       const current = stateRef.current;
-      if (
-        !forceRemount &&
-        current.provider.instanceId &&
-        current.provider.providerId === providerId
-      ) {
-        return current.provider.instanceId;
-      }
-      if (current.provider.instanceId) {
-        motionAbortRef.current?.abort();
-        windowSession.unbind();
-        handlesRef.current.invalidateInstance(current.provider.instanceId);
-      }
       const entry = getProvider(catalog, providerId);
       const id = providerKey(entry);
+      const existing = findProviderWindow(current, id);
+      if (
+        existing &&
+        existing.origin === entry.origin &&
+        existing.entryUrl === entry.entryUrl
+      ) {
+        dispatch({
+          type: "provider/focus",
+          instanceId: existing.instanceId,
+          touchedAt: Date.now(),
+        });
+        return existing.instanceId;
+      }
+      if (existing) {
+        handlesRef.current.invalidateInstance(existing.instanceId);
+        loadWaitersRef.current.delete(existing.instanceId);
+        dispatch({ type: "provider/unmount", instanceId: existing.instanceId });
+      }
       const instanceId = `${id}_${crypto.randomUUID()}`;
+      waitForLoad(instanceId);
       dispatch({
         type: "provider/mount",
         providerId: id,
         instanceId,
         origin: entry.origin,
         entryUrl: entry.entryUrl,
+        openedBy,
+        touchedAt: Date.now(),
       });
+      dispatch({ type: "placement/appear", instanceId });
       return instanceId;
     },
-    [catalog, windowSession],
+    [catalog, waitForLoad],
   );
 
-  const unmountProvider = useCallback(() => {
-    motionAbortRef.current?.abort();
-    windowSession.unbind();
-    const instanceId = stateRef.current.provider.instanceId;
-    if (instanceId) {
-      handlesRef.current.invalidateInstance(instanceId);
-      dispatch({ type: "handles/invalidate", instanceId });
-    }
-    dispatch({ type: "provider/unmount" });
-  }, [windowSession]);
-
-  const closeProvider = useCallback(() => {
-    unmountProvider();
-  }, [unmountProvider]);
+  const closeProvider = useCallback((instanceId: string) => {
+    handlesRef.current.invalidateInstance(instanceId);
+    loadWaitersRef.current.delete(instanceId);
+    dispatch({ type: "provider/unmount", instanceId });
+  }, []);
 
   useEffect(() => {
-    const providerId = state.provider.providerId;
-    if (providerId && !hasProvider(catalog, providerId)) {
-      unmountProvider();
+    for (const windowState of Object.values(state.windows)) {
+      if (!hasProvider(catalog, windowState.providerId)) {
+        closeProvider(windowState.instanceId);
+        continue;
+      }
+      const provider = getProvider(catalog, windowState.providerId);
+      if (
+        provider.origin !== windowState.origin ||
+        provider.entryUrl !== windowState.entryUrl
+      ) {
+        openProvider(windowState.providerId, windowState.openedBy);
+      }
     }
-  }, [catalog, state.provider.providerId, unmountProvider]);
+  }, [catalog, closeProvider, openProvider, state.windows]);
 
   const runDiscovery = useCallback(
     async (
       providerId: string,
       signal: AbortSignal,
-      forceRemount = false,
     ): Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>> => {
+      let instanceId: string | undefined;
       try {
         const entry = getProvider(catalog, providerId);
         const id = providerKey(entry);
-        const instanceId = openProvider(providerId, forceRemount);
-        await waitForLoad(instanceId);
+        const openedInstanceId = openProvider(providerId, "agent");
+        instanceId = openedInstanceId;
+        await waitForLoad(openedInstanceId);
         signal.throwIfAborted();
-        dispatch({ type: "provider/discovering", instanceId });
+        dispatch({
+          type: "provider/discovering",
+          instanceId: openedInstanceId,
+        });
 
         const modelContext = document.modelContext;
         if (!modelContext) {
           dispatch({ type: "webmcp/unavailable" });
           dispatch({
             type: "provider/failed",
-            instanceId,
+            instanceId: openedInstanceId,
             reason: "webmcp_unavailable",
           });
           return boundedError(
@@ -241,17 +259,17 @@ export function RuntimeProvider({
           rawTools.map((tool) =>
             normalizeDiscoveredTool({
               providerId: id,
-              instanceId,
+              instanceId: openedInstanceId,
               expectedOrigin: entry.origin,
               tool,
               enforceCustomSchemaBounds: entry.source === "custom",
             }),
           ),
         );
-        handlesRef.current.invalidateInstance(instanceId);
+        handlesRef.current.invalidateInstance(openedInstanceId);
         for (const tool of normalized) {
           handlesRef.current.set(
-            instanceId,
+            openedInstanceId,
             tool.descriptor.origin,
             tool.descriptor.name,
             tool.handle,
@@ -259,7 +277,7 @@ export function RuntimeProvider({
         }
         dispatch({
           type: "provider/ready",
-          instanceId,
+          instanceId: openedInstanceId,
           tools: normalized.map((tool) => tool.descriptor),
         });
         const output: DiscoverCapabilitiesOutput = {
@@ -272,7 +290,13 @@ export function RuntimeProvider({
         return boundedSuccess(output);
       } catch (error) {
         if (error instanceof DirectoryError) {
-          dispatch({ type: "provider/failed", reason: error.code });
+          if (instanceId) {
+            dispatch({
+              type: "provider/failed",
+              instanceId,
+              reason: error.code,
+            });
+          }
           return boundedError(error.code, error.message);
         }
         const code =
@@ -288,7 +312,9 @@ export function RuntimeProvider({
                 : error instanceof Error && error.message === "invalid_json"
                   ? "invalid_schema"
                 : "discovery_failed";
-        dispatch({ type: "provider/failed", reason: code });
+        if (instanceId) {
+          dispatch({ type: "provider/failed", instanceId, reason: code });
+        }
         return boundedError(code, "Capability discovery failed.");
       }
     },
@@ -375,7 +401,7 @@ export function RuntimeProvider({
           },
           getState: () => stateRef.current,
           discover: (providerId, operationSignal) =>
-            runDiscovery(providerId, operationSignal, true),
+            runDiscovery(providerId, operationSignal),
           getHandle: (instanceId, origin, toolName) =>
             handlesRef.current.get(instanceId, origin, toolName),
           getModelContext: () => document.modelContext,
@@ -439,7 +465,7 @@ export function RuntimeProvider({
             getState: () => stateRef.current,
             dispatch,
             discover: (providerId, operationSignal) =>
-              runDiscovery(providerId, operationSignal, true),
+              runDiscovery(providerId, operationSignal),
             getHandle: (instanceId, origin, toolName) =>
               handlesRef.current.get(instanceId, origin, toolName),
             getModelContext: () => document.modelContext,
@@ -499,149 +525,80 @@ export function RuntimeProvider({
     [],
   );
 
-  const applySurfaceLayout = useCallback((placement: "stage" | "tray") => {
-    const workspace = workspaceRef.current;
-    const surface = surfaceRef.current;
-    const workArea = stageSlotRef.current;
-    const tray = traySlotRef.current;
-    const session = windowSession;
-    if (!workspace || !surface || !workArea) {
-      return;
-    }
-    session.bind({
-      window: surface,
-      workspace,
-      workArea,
-      iframe: iframeRef.current,
-    });
-    if (placement === "tray") {
-      if (!tray) {
+  const registerTrayTarget = useCallback(
+    (
+      providerId: string,
+      slot: HTMLSpanElement | null,
+      restoreButton: HTMLButtonElement | null,
+    ) => {
+      if (!slot && !restoreButton) {
+        trayTargetsRef.current.delete(providerId);
         return;
       }
-      applyFrame(surface, layoutFromRect(
-        workspace.getBoundingClientRect(),
-        tray.getBoundingClientRect(),
-      ));
-      surface.inert = true;
-      return;
-    }
-    if (session.hasFrame()) {
-      session.applyCurrent();
-    } else {
-      session.openStage();
-    }
-    surface.inert = false;
-  }, [windowSession]);
-
-  const requestPlacement = useCallback(
-    (placement: "stage" | "tray") => {
-      const current = stateRef.current;
-      if (
-        current.motion === "suction" ||
-        current.provider.lifecycle === "unmounted" ||
-        current.provider.placement === placement
-      ) {
-        return;
-      }
-      const surface = surfaceRef.current;
-      const workspace = workspaceRef.current;
-      const destination =
-        placement === "stage" ? stageSlotRef.current : traySlotRef.current;
-      if (!surface || !workspace || !destination) {
-        return;
-      }
-      if (placement === "tray") {
-        windowSession.snapshotStage();
-      }
-      if (placement === "stage") {
-        windowSession.restoreStage();
-      } else {
-        applySurfaceLayout("tray");
-      }
-      surface.inert = placement === "tray";
-      dispatch({ type: "motion/finish", placement });
-      if (placement === "tray") {
-        restoreButtonRef.current?.focus();
-      } else {
-        stageSlotRef.current?.focus();
-      }
+      trayTargetsRef.current.set(providerId, { slot, restoreButton });
     },
-    [applySurfaceLayout, windowSession],
+    [],
+  );
+  const getTrayTarget = useCallback(
+    (providerId: string) => trayTargetsRef.current.get(providerId),
+    [],
   );
 
   const activateProvider = useCallback(
     (providerId: string) => {
       const current = stateRef.current;
-      if (
-        current.provider.providerId === providerId &&
-        current.provider.lifecycle !== "unmounted"
-      ) {
-        if (current.provider.placement === "tray") {
-          requestPlacement("stage");
+      const existing = findProviderWindow(current, providerId);
+      if (existing) {
+        dispatch({
+          type: "provider/focus",
+          instanceId: existing.instanceId,
+          touchedAt: Date.now(),
+        });
+        if (existing.placement === "tray") {
+          dispatch({
+            type: "placement/request",
+            instanceId: existing.instanceId,
+            placement: "stage",
+          });
         }
         return;
       }
-      openProvider(providerId);
+      openProvider(providerId, "human");
     },
-    [openProvider, requestPlacement],
+    [openProvider],
   );
-
-  useIsomorphicLayoutEffect(() => {
-    if (state.provider.lifecycle === "unmounted") {
-      windowSession.unbind();
-      return;
-    }
-    applySurfaceLayout(state.provider.placement);
-    const workspace = workspaceRef.current;
-    if (!workspace) {
-      return;
-    }
-    const observer = new ResizeObserver(() => {
-      if (layoutRafRef.current) {
-        return;
-      }
-      layoutRafRef.current = requestAnimationFrame(() => {
-        layoutRafRef.current = 0;
-        const current = stateRef.current;
-        if (
-          current.motion === "suction" ||
-          current.provider.lifecycle === "unmounted"
-        ) {
-          return;
-        }
-        if (current.provider.placement === "tray") {
-          applySurfaceLayout("tray");
-          return;
-        }
-        windowSession.relayout();
-      });
+  const focusProvider = useCallback((instanceId: string) => {
+    dispatch({
+      type: "provider/focus",
+      instanceId,
+      touchedAt: Date.now(),
     });
-    observer.observe(workspace);
-    const workArea = stageSlotRef.current;
-    if (workArea) {
-      observer.observe(workArea);
-    }
+  }, []);
+  const requestPlacement = useCallback(
+    (
+      instanceId: string,
+      placement: ProviderPlacement,
+      settle?: "unmount",
+    ) => {
+      dispatch({ type: "placement/request", instanceId, placement, settle });
+    },
+    [],
+  );
+  const finishPlacement = useCallback((instanceId: string) => {
+    const motion = stateRef.current.motion;
     if (
-      state.provider.placement === "stage" &&
-      !windowSession.hasFrame()
+      motion.status === "suction" &&
+      motion.instanceId === instanceId &&
+      motion.settle === "unmount"
     ) {
-      requestAnimationFrame(() => {
-        windowSession.openStage();
-      });
+      handlesRef.current.invalidateInstance(instanceId);
+      loadWaitersRef.current.delete(instanceId);
     }
-    return () => {
-      observer.disconnect();
-      if (layoutRafRef.current) {
-        cancelAnimationFrame(layoutRafRef.current);
-        layoutRafRef.current = 0;
-      }
-    };
-  }, [
-    applySurfaceLayout,
-    state.provider.lifecycle,
-    state.provider.placement,
-    windowSession,
-  ]);
+    dispatch({ type: "motion/finish", instanceId });
+  }, []);
+  const cancelPlacement = useCallback((instanceId: string) => {
+    dispatch({ type: "motion/cancel", instanceId });
+  }, []);
 
   const api = useMemo<RuntimeApi>(
     () => ({
@@ -651,44 +608,54 @@ export function RuntimeProvider({
       account,
       workspaceRef,
       stageSlotRef,
-      traySlotRef,
-      surfaceRef,
-      iframeRef,
-      restoreButtonRef,
-      requestPlacement,
       openProvider,
-      closeProvider,
       activateProvider,
+      registerTrayTarget,
       testProvider,
-      windowSession
     }),
     [
       account,
       directory,
       openProvider,
-      closeProvider,
       activateProvider,
+      registerTrayTarget,
       testProvider,
-      requestPlacement,
       state,
-      windowSession,
     ],
   );
 
   return (
     <RuntimeContextProvider value={api}>
+      <PlacementMotionDebug />
       <div ref={workspaceRef} className="desktop-canvas relative flex h-dvh flex-col overflow-hidden">
         <div
           inert={sessionEnded ? true : undefined}
           className="relative h-full min-h-0 w-full flex-1"
         >
           {children}
-          <ProviderIframe
-            state={state}
-            catalog={catalog}
-            iframeRef={iframeRef}
-            onLoad={onIframeLoad}
-          />
+          {Object.values(state.windows).map((windowState) => {
+            const stackIndex = state.windowOrder.indexOf(
+              windowState.instanceId,
+            );
+            return stackIndex >= 0 ? (
+              <ProviderWindowHost
+                key={windowState.instanceId}
+                windowState={windowState}
+                catalog={catalog}
+                workspaceRef={workspaceRef}
+                stageSlotRef={stageSlotRef}
+                getTrayTarget={getTrayTarget}
+                motion={state.motion}
+                stackIndex={10 + stackIndex}
+                onLoad={onIframeLoad}
+                onFocus={focusProvider}
+                onPlacement={requestPlacement}
+                onMotionFinish={finishPlacement}
+                onMotionCancel={cancelPlacement}
+                onClose={closeProvider}
+              />
+            ) : null;
+          })}
         </div>
         <SignedOutState />
       </div>
@@ -708,40 +675,257 @@ export function RuntimeProvider({
   );
 }
 
-function ProviderIframe({
-  state,
+function ProviderWindowHost({
+  windowState,
   catalog,
-  iframeRef,
+  workspaceRef,
+  stageSlotRef,
+  getTrayTarget,
+  motion,
+  stackIndex,
   onLoad,
+  onFocus,
+  onPlacement,
+  onMotionFinish,
+  onMotionCancel,
+  onClose,
 }: {
-  state: RuntimeState;
+  windowState: ProviderWindow;
   catalog: ProviderCatalog;
-  iframeRef: RefObject<HTMLIFrameElement | null>;
-  onLoad: () => void;
+  workspaceRef: RefObject<HTMLDivElement | null>;
+  stageSlotRef: RefObject<HTMLDivElement | null>;
+  getTrayTarget: (providerId: string) => TrayTarget | undefined;
+  motion: RuntimeMotion;
+  stackIndex: number;
+  onLoad: (instanceId: string) => void;
+  onFocus: (instanceId: string) => void;
+  onPlacement: (
+    instanceId: string,
+    placement: ProviderPlacement,
+    settle?: "unmount",
+  ) => void;
+  onMotionFinish: (instanceId: string) => void;
+  onMotionCancel: (instanceId: string) => void;
+  onClose: (instanceId: string) => void;
 }) {
-  if (
-    state.provider.lifecycle === "unmounted" ||
-    !state.provider.entryUrl ||
-    !state.provider.providerId
-  ) {
-    return null;
-  }
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [windowSession] = useState(createWindowSession);
+  const reduceMotion = useReducedMotion();
+  const previousPlacementRef = useRef(windowState.placement);
+  const layoutRafRef = useRef(0);
+  const provider = getProvider(catalog, windowState.providerId);
+  const placementMotion =
+    motion.status === "suction" &&
+    motion.instanceId === windowState.instanceId
+      ? motion
+      : null;
 
-  const provider = getProvider(catalog, state.provider.providerId);
+  const applyLayout = useCallback(() => {
+    const workspace = workspaceRef.current;
+    const surface = surfaceRef.current;
+    const workArea = stageSlotRef.current;
+    if (!workspace || !surface || !workArea) {
+      return;
+    }
+    windowSession.bind({
+      window: surface,
+      workspace,
+      workArea,
+      iframe: iframeRef.current,
+    });
+    if (placementMotion) {
+      return;
+    }
+    clearPlacementPresentation(surface);
+    if (windowState.placement === "tray") {
+      if (previousPlacementRef.current === "stage") {
+        windowSession.snapshotStage();
+      }
+      surface.style.visibility = "hidden";
+      surface.inert = true;
+    } else {
+      surface.style.visibility = "visible";
+      if (previousPlacementRef.current === "tray") {
+        windowSession.restoreStage();
+      } else if (windowSession.hasFrame()) {
+        windowSession.applyCurrent();
+      } else {
+        windowSession.openStage();
+      }
+      surface.inert = false;
+    }
+    previousPlacementRef.current = windowState.placement;
+  }, [
+    placementMotion,
+    stageSlotRef,
+    windowSession,
+    windowState.placement,
+    workspaceRef,
+  ]);
+
+  useIsomorphicLayoutEffect(() => {
+    windowSession.setStackIndex(stackIndex);
+  }, [stackIndex, windowSession]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!placementMotion) {
+      return;
+    }
+    if (reduceMotion) {
+      onMotionFinish(windowState.instanceId);
+      if (
+        placementMotion.placement === "stage" &&
+        placementMotion.settle !== "unmount"
+      ) {
+        requestAnimationFrame(() => iframeRef.current?.focus());
+      }
+      return;
+    }
+    const workspace = workspaceRef.current;
+    const surface = surfaceRef.current;
+    const workArea = stageSlotRef.current;
+    const trayTarget = getTrayTarget(windowState.providerId);
+    if (!workspace || !surface || !workArea || !trayTarget?.slot) {
+      if (placementMotion.settle === "unmount") {
+        onClose(windowState.instanceId);
+      } else {
+        onMotionCancel(windowState.instanceId);
+      }
+      return;
+    }
+    windowSession.bind({
+      window: surface,
+      workspace,
+      workArea,
+      iframe: iframeRef.current,
+    });
+    clearPlacementPresentation(surface);
+    if (placementMotion.placement === "tray") {
+      windowSession.snapshotStage();
+    } else {
+      windowSession.restoreStage();
+    }
+    surface.style.visibility = "visible";
+    surface.inert = true;
+    const workspaceRect = workspace.getBoundingClientRect();
+    const source = layoutFromRect(
+      workspaceRect,
+      surface.getBoundingClientRect(),
+    );
+    const target = layoutFromRect(
+      workspaceRect,
+      trayTarget.slot.getBoundingClientRect(),
+    );
+    const animation = animatePlacement({
+      surface,
+      source,
+      target,
+      placement: placementMotion.placement,
+      onComplete: () => {
+        onMotionFinish(windowState.instanceId);
+        if (
+          placementMotion.placement === "stage" &&
+          placementMotion.settle !== "unmount"
+        ) {
+          requestAnimationFrame(() => iframeRef.current?.focus());
+        }
+      },
+    });
+    return () => {
+      animation.stop();
+      animation.clear();
+    };
+  }, [
+    getTrayTarget,
+    onClose,
+    onMotionCancel,
+    onMotionFinish,
+    placementMotion,
+    reduceMotion,
+    windowSession,
+    windowState.instanceId,
+    windowState.providerId,
+    workspaceRef,
+    stageSlotRef,
+  ]);
+
+  useIsomorphicLayoutEffect(() => {
+    applyLayout();
+    const workspace = workspaceRef.current;
+    if (!workspace) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (layoutRafRef.current) {
+        return;
+      }
+      layoutRafRef.current = requestAnimationFrame(() => {
+        layoutRafRef.current = 0;
+        if (placementMotion) {
+          return;
+        }
+        if (windowState.placement === "tray") {
+          applyLayout();
+        } else {
+          windowSession.relayout();
+        }
+      });
+    });
+    observer.observe(workspace);
+    if (stageSlotRef.current) {
+      observer.observe(stageSlotRef.current);
+    }
+    return () => {
+      observer.disconnect();
+      if (layoutRafRef.current) {
+        cancelAnimationFrame(layoutRafRef.current);
+        layoutRafRef.current = 0;
+      }
+    };
+  }, [
+    applyLayout,
+    placementMotion,
+    stageSlotRef,
+    windowSession,
+    windowState.placement,
+    workspaceRef,
+  ]);
+
+  useEffect(() => () => windowSession.unbind(), [windowSession]);
 
   return (
     <AppWindow.Root
-      key={state.provider.instanceId}
+      providerId={windowState.providerId}
+      instanceId={windowState.instanceId}
       title={provider.label}
       icon={provider.icon}
+      placement={placementMotion ? "stage" : windowState.placement}
+      suctioning={Boolean(placementMotion)}
+      motionTarget={placementMotion?.placement ?? null}
+      surfaceRef={surfaceRef}
+      windowSession={windowSession}
+      onFocus={() => onFocus(windowState.instanceId)}
+      onClose={() => {
+        if (windowSession.isMaximized()) {
+          onClose(windowState.instanceId);
+          return;
+        }
+        onPlacement(windowState.instanceId, "tray", "unmount");
+      }}
+      onMinimize={() => {
+        onPlacement(windowState.instanceId, "tray");
+        getTrayTarget(windowState.providerId)?.restoreButton?.focus();
+      }}
     >
       <iframe
         ref={iframeRef}
-        src={state.provider.entryUrl}
+        src={windowState.entryUrl}
         allow="tools"
         title={provider.label}
         className="size-full border-0"
-        onLoad={onLoad}
+        onFocus={() => onFocus(windowState.instanceId)}
+        onLoad={() => onLoad(windowState.instanceId)}
       />
     </AppWindow.Root>
   );

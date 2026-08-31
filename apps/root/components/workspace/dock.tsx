@@ -89,8 +89,11 @@ function useDockMotion(index: number) {
 
 export function DockRoot({
   children,
+  locked = false,
   ...props
-}: Omit<ComponentProps<"nav">, "className">) {
+}: Omit<ComponentProps<"nav">, "className"> & {
+  locked?: boolean;
+}) {
   const navRef = useRef<HTMLElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const watching = useRef(false);
@@ -99,6 +102,7 @@ export function DockRoot({
   const rowLeft = useMotionValue(0);
   const rowWidth = useMotionValue(0);
   const holdRest = useRef(false);
+  const wasLocked = useRef(locked);
   const itemCount = Children.count(children);
   const onWindowPointerRef = useRef<(event: PointerEvent) => void>(() => undefined);
 
@@ -125,6 +129,9 @@ export function DockRoot({
   }
 
   onWindowPointerRef.current = (event: PointerEvent) => {
+    if (locked) {
+      return;
+    }
     const onDock = pointerOnDock(event.clientX, event.clientY);
     if (holdRest.current) {
       holdRest.current = false;
@@ -165,8 +172,24 @@ export function DockRoot({
     };
   }, []);
 
+  useEffect(() => {
+    if (wasLocked.current && !locked) {
+      holdRest.current = true;
+      hovering.set(0);
+      if (!watching.current) {
+        watching.current = true;
+        window.addEventListener("pointermove", onWindowPointerStable);
+      }
+    }
+    wasLocked.current = locked;
+  }, [hovering, locked]);
+
   function track(event: ReactPointerEvent<HTMLElement>) {
-    if (holdRest.current || !dockPointerAllowed(event.pointerType)) {
+    if (
+      locked ||
+      holdRest.current ||
+      !dockPointerAllowed(event.pointerType)
+    ) {
       return;
     }
     const row = rowRef.current;
@@ -192,9 +215,16 @@ export function DockRoot({
         aria-label="Providers"
         data-caliper-id="root-dock"
         onPointerEnter={track}
-        onClick={() => {
+        onClick={(event) => {
           holdRest.current = true;
-          hovering.set(0);
+          const restoring = Boolean(
+            (event.target as Element).closest(
+              '[data-window-placement="tray"]',
+            ),
+          );
+          if (!restoring) {
+            hovering.set(0);
+          }
           watchWindow();
         }}
         onPointerLeave={(event) => {

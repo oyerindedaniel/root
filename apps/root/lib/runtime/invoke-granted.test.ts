@@ -90,6 +90,8 @@ function readyState(
     instanceId: "custom_1",
     origin,
     entryUrl,
+    openedBy: "agent",
+    touchedAt: 1,
   });
   state = runtimeReducer(state, {
     type: "provider/loaded",
@@ -119,7 +121,7 @@ function setup(options: {
       providerId: provider.id,
       origin: provider.origin,
       contractVersion: null,
-      tools: state.discoveredTools,
+      tools: state.windows.custom_1?.discoveredTools ?? [],
     });
   });
   const defaultModelContext =

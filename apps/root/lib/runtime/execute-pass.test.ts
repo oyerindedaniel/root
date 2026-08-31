@@ -122,6 +122,8 @@ function createHarness(steps: PreparedWorkflowStep[]) {
       instanceId,
       origin: step.origin,
       entryUrl: `${step.origin}/`,
+      openedBy: "agent",
+      touchedAt: state.windowOrder.length + 1,
     });
     state = runtimeReducer(state, {
       type: "provider/loaded",
@@ -232,6 +234,13 @@ describe("executePass", () => {
     expect(harness.getState().workflow.evidence).toBe(
       '1 customers for "ada"; 1 products for "keyboard"',
     );
+    expect(Object.keys(harness.getState().windows)).toEqual([
+      "accounts_instance",
+      "shop_instance",
+    ]);
+    expect(
+      harness.getState().windows.accounts_instance?.instanceId,
+    ).toBe("accounts_instance");
   });
 
   it("returns workflow_not_prepared without starting discovery", async () => {

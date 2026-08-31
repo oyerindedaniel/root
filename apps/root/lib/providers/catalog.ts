@@ -108,7 +108,7 @@ export function installedApps(catalog: ProviderCatalog): InstalledApp[] {
 export function resolveDockApps(
   catalog: ProviderCatalog,
   dock: readonly DockReference[],
-  activeProviderId: string | null = null,
+  activeProviderIds: readonly string[] = [],
 ): InstalledApp[] {
   const apps = installedApps(catalog);
   const byKey = new Map(apps.map((app) => [`${app.kind}:${app.id}`, app]));
@@ -116,15 +116,16 @@ export function resolveDockApps(
     const app = byKey.get(`${reference.kind}:${reference.id}`);
     return app ? [app] : [];
   });
-  if (
-    activeProviderId &&
-    !resolved.some(
-      (app) => app.kind === "provider" && app.id === activeProviderId,
-    )
-  ) {
-    const active = byKey.get(`provider:${activeProviderId}`);
-    if (active) {
-      resolved.push(active);
+  for (const activeProviderId of activeProviderIds) {
+    if (
+      !resolved.some(
+        (app) => app.kind === "provider" && app.id === activeProviderId,
+      )
+    ) {
+      const active = byKey.get(`provider:${activeProviderId}`);
+      if (active) {
+        resolved.push(active);
+      }
     }
   }
   return resolved;

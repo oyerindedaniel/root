@@ -9,7 +9,7 @@ import {
 } from "@repo/contracts";
 
 import { bindPassReadStep } from "./pass-tools";
-import type { RuntimeState } from "./state";
+import { findProviderWindow, type RuntimeState } from "./state";
 
 export function prepareWorkflow(options: {
   state: RuntimeState;
@@ -53,16 +53,17 @@ export function revalidatePreparedStep(options: {
   step: PreparedWorkflowStep;
 }): { ok: true } | { ok: false; error: BoundedError } {
   const { state, step } = options;
-  if (state.provider.providerId !== step.providerId) {
+  const windowState = findProviderWindow(state, step.providerId);
+  if (!windowState) {
     return {
       ok: false,
       error: boundedError(
         "revalidation_failed",
-        "The open document is not the prepared provider.",
+        "The prepared provider window is not open.",
       ),
     };
   }
-  if (state.provider.origin !== step.origin) {
+  if (windowState.origin !== step.origin) {
     return {
       ok: false,
       error: boundedError(
@@ -72,7 +73,7 @@ export function revalidatePreparedStep(options: {
     };
   }
   const tool = findDiscoveredTool(
-    state.discoveredTools,
+    windowState.discoveredTools,
     step.providerId,
     step.toolName,
   );
@@ -141,8 +142,12 @@ function bindProposedStep(options: {
 
   let schemaFingerprint: string | null = null;
   if (isLiveProvider(options.state, proposed.providerId, origin)) {
+    const windowState = findProviderWindow(
+      options.state,
+      proposed.providerId,
+    );
     const tool = findDiscoveredTool(
-      options.state.discoveredTools,
+      windowState?.discoveredTools ?? [],
       proposed.providerId,
       proposed.tool,
     );
@@ -178,11 +183,11 @@ function isLiveProvider(
   providerId: ProviderId,
   origin: string,
 ) {
+  const windowState = findProviderWindow(state, providerId);
   return (
-    state.provider.providerId === providerId &&
-    state.provider.origin === origin &&
-    (state.provider.lifecycle === "ready" ||
-      state.provider.lifecycle === "active")
+    windowState?.origin === origin &&
+    (windowState.lifecycle === "ready" ||
+      windowState.lifecycle === "active")
   );
 }
 

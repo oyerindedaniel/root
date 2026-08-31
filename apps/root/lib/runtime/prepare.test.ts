@@ -28,15 +28,31 @@ function readyProvider(
   toolName: string,
   namespacedName: string,
 ) {
+  return addReadyProvider(
+    createInitialRuntimeState(account),
+    providerId,
+    toolName,
+    namespacedName,
+  );
+}
+
+function addReadyProvider(
+  initial: ReturnType<typeof createInitialRuntimeState>,
+  providerId: "shop" | "accounts" | "support",
+  toolName: string,
+  namespacedName: string,
+) {
   const instanceId = `${providerId}_1`;
   const origin = origins[providerId];
-  let state = createInitialRuntimeState(account);
+  let state = initial;
   state = runtimeReducer(state, {
     type: "provider/mount",
     providerId,
     instanceId,
     origin,
     entryUrl: `${origin}/`,
+    openedBy: "human",
+    touchedAt: 1,
   });
   state = runtimeReducer(state, {
     type: "provider/loaded",
@@ -165,6 +181,45 @@ describe("prepareWorkflow", () => {
     if (prepared.ok) {
       expect(prepared.steps[0]?.schemaFingerprint).toBe(fingerprint);
       expect(prepared.steps[1]?.schemaFingerprint).toBeNull();
+    }
+  });
+
+  it("stamps fingerprints for every matching live provider window", () => {
+    const accounts = readyProvider(
+      "accounts",
+      "search_customers",
+      "accounts.search_customers",
+    );
+    const state = addReadyProvider(
+      accounts,
+      "shop",
+      "search_products",
+      "shop.search_products",
+    );
+    const prepared = prepareWorkflow({
+      state,
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "search_customers",
+          arguments: { query: "ada" },
+        },
+        {
+          providerId: "shop",
+          tool: "search_products",
+          arguments: { query: "keyboard" },
+        },
+      ],
+    });
+
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.steps.map((step) => step.schemaFingerprint)).toEqual([
+        fingerprint,
+        fingerprint,
+      ]);
     }
   });
 
@@ -365,6 +420,8 @@ describe("prepareWorkflow", () => {
       instanceId,
       origin: origins.shop,
       entryUrl: `${origins.shop}/`,
+      openedBy: "human",
+      touchedAt: 1,
     });
     state = runtimeReducer(state, {
       type: "provider/loaded",
@@ -400,7 +457,9 @@ describe("revalidatePreparedStep", () => {
     const revalidated = revalidatePreparedStep({
       state: {
         ...state,
-        provider: { ...state.provider, providerId: "accounts" },
+        windows: {},
+        windowOrder: [],
+        focusedInstanceId: null,
       },
       step,
     });
@@ -416,7 +475,13 @@ describe("revalidatePreparedStep", () => {
     const revalidated = revalidatePreparedStep({
       state: {
         ...state,
-        provider: { ...state.provider, origin: origins.accounts },
+        windows: {
+          ...state.windows,
+          shop_1: {
+            ...state.windows.shop_1!,
+            origin: origins.accounts,
+          },
+        },
       },
       step,
     });
@@ -430,7 +495,13 @@ describe("revalidatePreparedStep", () => {
   it("fails when the tool disappeared", () => {
     const { state, step } = preparedProductStep();
     const revalidated = revalidatePreparedStep({
-      state: { ...state, discoveredTools: [] },
+      state: {
+        ...state,
+        windows: {
+          ...state.windows,
+          shop_1: { ...state.windows.shop_1!, discoveredTools: [] },
+        },
+      },
       step,
     });
 
@@ -445,10 +516,15 @@ describe("revalidatePreparedStep", () => {
     const revalidated = revalidatePreparedStep({
       state: {
         ...state,
-        discoveredTools: state.discoveredTools.map((tool) => ({
-          ...tool,
-          readOnlyHint: false,
-        })),
+        windows: {
+          ...state.windows,
+          shop_1: {
+            ...state.windows.shop_1!,
+            discoveredTools: state.windows.shop_1!.discoveredTools.map(
+              (tool) => ({ ...tool, readOnlyHint: false }),
+            ),
+          },
+        },
       },
       step,
     });
@@ -463,10 +539,15 @@ describe("revalidatePreparedStep", () => {
     const { state, step } = preparedProductStep();
     const changed = {
       ...state,
-      discoveredTools: state.discoveredTools.map((tool) => ({
-        ...tool,
-        schemaFingerprint: "other",
-      })),
+      windows: {
+        ...state.windows,
+        shop_1: {
+          ...state.windows.shop_1!,
+          discoveredTools: state.windows.shop_1!.discoveredTools.map(
+            (tool) => ({ ...tool, schemaFingerprint: "other" }),
+          ),
+        },
+      },
     };
     const revalidated = revalidatePreparedStep({
       state: changed,

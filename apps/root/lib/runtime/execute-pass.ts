@@ -17,7 +17,11 @@ import { executeRegisteredTool } from "../webmcp/execute";
 import { isCancellation } from "./cancellation";
 import { parsePassToolResult } from "./pass-tools";
 import { revalidatePreparedStep } from "./prepare";
-import type { RuntimeAction, RuntimeState } from "./state";
+import {
+  findProviderWindow,
+  type RuntimeAction,
+  type RuntimeState,
+} from "./state";
 
 export type ExecutePassDependencies = {
   getState: () => RuntimeState;
@@ -95,7 +99,8 @@ export async function executePass(options: {
         dependencies.dispatch({ type: "workflow/invalidate" });
         return revalidated.error;
       }
-      if (!live.provider.instanceId) {
+      const windowState = findProviderWindow(live, step.providerId);
+      if (!windowState) {
         dependencies.dispatch({ type: "workflow/invalidate" });
         return boundedError(
           "revalidation_failed",
@@ -104,11 +109,11 @@ export async function executePass(options: {
       }
 
       const handle = dependencies.getHandle(
-        live.provider.instanceId,
+        windowState.instanceId,
         step.origin,
         step.toolName,
       );
-      const descriptor = live.discoveredTools.find(
+      const descriptor = windowState.discoveredTools.find(
         (tool) =>
           tool.providerId === step.providerId && tool.name === step.toolName,
       );

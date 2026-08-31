@@ -18,7 +18,7 @@ import { executeRegisteredTool } from "@/lib/webmcp/execute";
 import { validateJsonSchemaInput } from "@/lib/webmcp/json-schema-validator";
 
 import { isCancellation } from "./cancellation";
-import type { RuntimeState } from "./state";
+import { findProviderWindow, type RuntimeState } from "./state";
 
 export type InvokeGrantedDependencies = {
   catalog: ProviderCatalog;
@@ -85,18 +85,18 @@ export async function invokeGrantedTool(options: {
     }
     signal.throwIfAborted();
     const state = dependencies.getState();
+    const windowState = findProviderWindow(state, provider.id);
     if (
-      state.provider.providerId !== provider.id ||
-      state.provider.origin !== provider.origin ||
-      state.provider.entryUrl !== provider.entryUrl ||
-      !state.provider.instanceId
+      !windowState ||
+      windowState.origin !== provider.origin ||
+      windowState.entryUrl !== provider.entryUrl
     ) {
       return boundedError(
         "revalidation_failed",
         "The mounted provider no longer matches the saved provider.",
       );
     }
-    const descriptor = state.discoveredTools.find(
+    const descriptor = windowState.discoveredTools.find(
       (tool) =>
         tool.providerId === provider.id &&
         tool.origin === provider.origin &&
@@ -121,7 +121,7 @@ export async function invokeGrantedTool(options: {
       );
     }
     const handle = dependencies.getHandle(
-      state.provider.instanceId,
+      windowState.instanceId,
       provider.origin,
       input.tool,
     );

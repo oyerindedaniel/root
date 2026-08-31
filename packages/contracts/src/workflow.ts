@@ -27,6 +27,16 @@ export const providerLifecycleSchema = z.enum([
   "executing",
   "failed",
 ]);
+/*
+  1. unmounted — no window row. Close deletes the instance; this value is absence, not a stored row.
+  2. mounting — iframe is loading. Document is not there yet.
+  3. loaded — iframe load fired. Document is there; tools are not listed yet.
+  4. discovering — listing WebMCP tools on that document.
+  5. ready — tools listed; window is in the tray. Same live document as active.
+  6. active — tools listed; window is on the stage. Prepare treats ready and active as live.
+  7. executing — a workflow step is invoking on this window.
+  8. failed — this window’s mount or discover failed, not the workflow’s own failed.
+*/
 
 export type ProviderLifecycle = z.infer<typeof providerLifecycleSchema>;
 

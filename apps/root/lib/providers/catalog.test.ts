@@ -265,12 +265,25 @@ describe("provider catalog", () => {
     });
     const catalog = createProviderCatalog(directory, unpinned);
     expect(
-      resolveDockApps(catalog, unpinned.dock, "shop").map((app) => app.id),
+      resolveDockApps(catalog, unpinned.dock, ["shop"]).map((app) => app.id),
     ).toEqual(["accounts", "support", "shop"]);
     expect(createDefaultWorkspacePreferences().dock.map((entry) => entry.id)).toEqual([
       "accounts",
       "shop",
       "support",
     ]);
+  });
+
+  it("retains every live unpinned provider in the Dock", () => {
+    const preferences = {
+      ...createDefaultWorkspacePreferences(),
+      dock: [],
+    };
+    const catalog = createProviderCatalog(directory, preferences);
+    expect(
+      resolveDockApps(catalog, preferences.dock, ["accounts", "support"]).map(
+        (app) => app.id,
+      ),
+    ).toEqual(["accounts", "support"]);
   });
 });

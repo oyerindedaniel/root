@@ -16,7 +16,6 @@ import type {
 
 import type { ProviderDirectory } from "@/lib/providers/directory";
 import type { RuntimeAction, RuntimeState } from "@/lib/runtime/state";
-import type { WindowSession } from "@/lib/window/session";
 
 export type RuntimeApi = {
   state: RuntimeState;
@@ -25,18 +24,16 @@ export type RuntimeApi = {
   account: Account;
   workspaceRef: RefObject<HTMLDivElement | null>;
   stageSlotRef: RefObject<HTMLDivElement | null>;
-  traySlotRef: RefObject<HTMLDivElement | null>;
-  surfaceRef: RefObject<HTMLDivElement | null>;
-  iframeRef: RefObject<HTMLIFrameElement | null>;
-  restoreButtonRef: RefObject<HTMLButtonElement | null>;
-  requestPlacement: (placement: "stage" | "tray") => void;
   openProvider: (providerId: string) => void;
-  closeProvider: () => void;
   activateProvider: (providerId: string) => void;
+  registerTrayTarget: (
+    providerId: string,
+    target: HTMLSpanElement | null,
+    restoreButton: HTMLButtonElement | null,
+  ) => void;
   testProvider: (
     providerId: string,
   ) => Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>>;
-  windowSession: WindowSession;
 };
 
 const RuntimeContext = createContext<RuntimeApi | null>(null);

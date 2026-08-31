@@ -1,14 +1,119 @@
 import {
   createDraftWorkflow,
-  createInitialRuntimeState,
+  findProviderWindow,
   toFailedWorkflow,
+  type ProviderWindow,
   type RuntimeAction,
   type RuntimeState,
+  type WorkflowState,
   type WorkflowCancelled,
   type WorkflowExecuting,
   type WorkflowPassed,
   type WorkflowPrepared,
 } from "./state";
+
+function updateWindow(
+  state: RuntimeState,
+  instanceId: string,
+  update: (windowState: ProviderWindow) => ProviderWindow,
+): RuntimeState {
+  const windowState = state.windows[instanceId];
+  if (!windowState) {
+    return state;
+  }
+  return {
+    ...state,
+    windows: {
+      ...state.windows,
+      [instanceId]: update(windowState),
+    },
+  };
+}
+
+function focusWindow(
+  state: RuntimeState,
+  instanceId: string,
+  touchedAt?: number,
+): RuntimeState {
+  const windowState = state.windows[instanceId];
+  if (!windowState) {
+    return state;
+  }
+  return {
+    ...state,
+    windows: touchedAt === undefined
+      ? state.windows
+      : {
+          ...state.windows,
+          [instanceId]: { ...windowState, lastTouchedAt: touchedAt },
+        },
+    windowOrder: [
+      ...state.windowOrder.filter((candidate) => candidate !== instanceId),
+      instanceId,
+    ],
+    focusedInstanceId: instanceId,
+  };
+}
+
+function unmountWindow(state: RuntimeState, instanceId: string): RuntimeState {
+  if (!state.windows[instanceId]) {
+    return state;
+  }
+  const windows = { ...state.windows };
+  delete windows[instanceId];
+  const windowOrder = state.windowOrder.filter(
+    (candidate) => candidate !== instanceId,
+  );
+  return {
+    ...state,
+    windows,
+    windowOrder,
+    motion:
+      state.motion.status === "suction" &&
+      state.motion.instanceId === instanceId
+        ? { status: "idle" }
+        : state.motion,
+    focusedInstanceId:
+      state.focusedInstanceId === instanceId
+        ? (windowOrder.at(-1) ?? null)
+        : state.focusedInstanceId,
+  };
+}
+
+function updateStepWindow(
+  state: RuntimeState,
+  update: (windowState: ProviderWindow) => ProviderWindow,
+): RuntimeState {
+  const providerId = state.workflow.step?.providerId;
+  if (!providerId) {
+    return state;
+  }
+  const windowState = findProviderWindow(state, providerId);
+  return windowState
+    ? updateWindow(state, windowState.instanceId, update)
+    : state;
+}
+
+function settleLifecycle(windowState: ProviderWindow): ProviderWindow {
+  return {
+    ...windowState,
+    lifecycle: windowState.placement === "stage" ? "active" : "ready",
+  };
+}
+
+function selectWorkflowStep(
+  workflow: WorkflowState,
+  index: number,
+): WorkflowState {
+  if (workflow.lifecycle === "draft") {
+    return workflow;
+  }
+  return {
+    ...workflow,
+    currentStepIndex: index,
+    step: workflow.steps[index] ?? null,
+  };
+}
 
 export function runtimeReducer(
   state: RuntimeState,
@@ -19,15 +124,22 @@ export function runtimeReducer(
       if (state.sessionStatus === "signed-out") {
         return state;
       }
-      return { ...state, sessionStatus: "signed-out", control: "human" };
+      return {
+        ...state,
+        sessionStatus: "signed-out",
+        control: "human",
+        motion: { status: "idle" },
+      };
     case "webmcp/available":
       return { ...state, webmcpStatus: "available" };
     case "webmcp/unavailable":
       return { ...state, webmcpStatus: "unavailable" };
     case "provider/mount":
-      return {
+      return focusWindow({
         ...state,
-        provider: {
+        windows: {
+          ...state.windows,
+          [action.instanceId]: {
           providerId: action.providerId,
           instanceId: action.instanceId,
           origin: action.origin,
@@ -36,121 +148,161 @@ export function runtimeReducer(
           placement: "stage",
           activeTool: null,
           failureReason: null,
-          iframeRevision: state.provider.iframeRevision,
           outcome: null,
+            discoveredTools: [],
+            openedBy: action.openedBy,
+            lastTouchedAt: action.touchedAt,
+          },
         },
-        discoveredTools: [],
-      };
+        windowOrder: [...state.windowOrder, action.instanceId],
+      }, action.instanceId);
+    case "provider/focus":
+      return focusWindow(state, action.instanceId, action.touchedAt);
     case "provider/loaded":
-      if (state.provider.instanceId !== action.instanceId) {
-        return state;
-      }
-      return {
-        ...state,
-        provider: {
-          ...state.provider,
+      return updateWindow(state, action.instanceId, (windowState) => ({
+          ...windowState,
           lifecycle: "loaded",
-          iframeRevision: state.provider.iframeRevision + 1,
           failureReason: null,
-        },
-        discoveredTools: [],
-      };
+          discoveredTools: [],
+      }));
     case "provider/discovering":
-      if (state.provider.instanceId !== action.instanceId) {
-        return state;
-      }
-      return {
-        ...state,
-        provider: { ...state.provider, lifecycle: "discovering" },
-      };
+      return updateWindow(state, action.instanceId, (windowState) => ({
+        ...windowState,
+        lifecycle: "discovering",
+      }));
     case "provider/ready":
-      if (state.provider.instanceId !== action.instanceId) {
-        return state;
-      }
-      return {
-        ...state,
-        provider: {
-          ...state.provider,
+      return updateWindow(state, action.instanceId, (windowState) => ({
+          ...windowState,
           lifecycle:
-            state.provider.placement === "stage" ? "active" : "ready",
+            windowState.placement === "stage" ? "active" : "ready",
           failureReason: null,
-        },
-        discoveredTools: action.tools,
-      };
+          discoveredTools: action.tools,
+      }));
     case "provider/active":
-      if (state.provider.instanceId !== action.instanceId) {
+      return updateWindow(state, action.instanceId, (windowState) => ({
+        ...windowState,
+        lifecycle: "active",
+        placement: "stage",
+      }));
+    case "provider/failed": {
+      const instanceId = action.instanceId ?? state.focusedInstanceId;
+      if (!instanceId) {
         return state;
       }
-      return {
+      return updateWindow(state, instanceId, (windowState) => ({
+          ...windowState,
+          lifecycle: "failed",
+          failureReason: action.reason,
+      }));
+    }
+    case "provider/unmount":
+      return unmountWindow(state, action.instanceId);
+    case "handles/invalidate":
+      if (!state.windows[action.instanceId]) {
+        return state;
+      }
+      return updateWindow({
         ...state,
-        provider: { ...state.provider, lifecycle: "active", placement: "stage" },
-      };
-    case "provider/failed":
+        workflow:
+          state.workflow.lifecycle === "prepared" &&
+          state.workflow.steps.some(
+            (step) =>
+              step.providerId === state.windows[action.instanceId]?.providerId,
+          )
+            ? toFailedWorkflow(state.workflow, "stale_handle")
+            : state.workflow,
+      }, action.instanceId, (windowState) => ({
+        ...windowState,
+        discoveredTools: [],
+      }));
+    case "placement/request": {
+      const windowState = state.windows[action.instanceId];
       if (
-        action.instanceId &&
-        state.provider.instanceId !== action.instanceId
+        state.motion.status === "suction" ||
+        !windowState ||
+        windowState.placement === action.placement
       ) {
         return state;
       }
       return {
         ...state,
-        provider: {
-          ...state.provider,
-          lifecycle: "failed",
-          failureReason: action.reason,
-        },
-      };
-    case "provider/unmount":
-      return {
-        ...createInitialRuntimeState(state.account),
-        sessionStatus: state.sessionStatus,
-        webmcpStatus: state.webmcpStatus,
-      };
-    case "handles/invalidate":
-      if (state.provider.instanceId !== action.instanceId) {
-        return state;
-      }
-      return {
-        ...state,
-        discoveredTools: [],
-        workflow:
-          state.workflow.lifecycle === "prepared"
-            ? toFailedWorkflow(state.workflow, "stale_handle")
-            : state.workflow,
-      };
-    case "placement/request":
-      if (state.motion === "suction") {
-        return state;
-      }
-      return { ...state, motion: "suction" };
-    case "motion/start":
-      return { ...state, motion: "suction" };
-    case "motion/finish":
-      return {
-        ...state,
-        motion: "idle",
-        provider: {
-          ...state.provider,
+        motion: {
+          status: "suction",
+          instanceId: action.instanceId,
           placement: action.placement,
-          lifecycle:
-            action.placement === "stage" &&
-            (state.provider.lifecycle === "ready" ||
-              state.provider.lifecycle === "active")
-              ? "active"
-              : action.placement === "tray" &&
-                  state.provider.lifecycle === "active"
-                ? "ready"
-                : state.provider.lifecycle,
+          ...(action.settle === "unmount" ? { settle: "unmount" } : {}),
         },
       };
+    }
+    case "placement/appear": {
+      const windowState = state.windows[action.instanceId];
+      if (
+        state.motion.status === "suction" ||
+        !windowState ||
+        windowState.placement !== "stage"
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        motion: {
+          status: "suction",
+          instanceId: action.instanceId,
+          placement: "stage",
+        },
+      };
+    }
+    case "motion/finish": {
+      if (
+        state.motion.status !== "suction" ||
+        state.motion.instanceId !== action.instanceId
+      ) {
+        return state;
+      }
+      if (state.motion.settle === "unmount") {
+        return unmountWindow(state, action.instanceId);
+      }
+      const placement = state.motion.placement;
+      return updateWindow({
+        ...state,
+        motion: { status: "idle" },
+      }, action.instanceId, (windowState) => ({
+          ...windowState,
+          placement,
+          lifecycle:
+            placement === "stage" &&
+            (windowState.lifecycle === "ready" ||
+              windowState.lifecycle === "active")
+              ? "active"
+              : placement === "tray" &&
+                  windowState.lifecycle === "active"
+                ? "ready"
+                : windowState.lifecycle,
+      }));
+    }
+    case "motion/cancel":
+      return state.motion.status === "suction" &&
+        state.motion.instanceId === action.instanceId
+        ? { ...state, motion: { status: "idle" } }
+        : state;
     case "control/set":
       return { ...state, control: action.control };
-    case "workflow/draft":
-      return {
+    case "workflow/draft": {
+      const windowState = state.workflow.step
+        ? findProviderWindow(state, state.workflow.step.providerId)
+        : undefined;
+      const next = {
         ...state,
         workflow: createDraftWorkflow(),
-        provider: { ...state.provider, activeTool: null, outcome: null },
       };
+      return windowState
+        ? updateWindow(next, windowState.instanceId, (currentWindow) => ({
+            ...currentWindow,
+            activeTool: null,
+            outcome: null,
+          }))
+        : next;
+    }
     case "workflow/prepared": {
       const step = action.steps[0] ?? null;
       const workflow: WorkflowPrepared = {
@@ -163,15 +315,20 @@ export function runtimeReducer(
         evidence: null,
         failureReason: null,
       };
-      return {
+      const next = {
         ...state,
         workflow,
-        provider: {
-          ...state.provider,
+      };
+      const windowState = step
+        ? findProviderWindow(state, step.providerId)
+        : undefined;
+      return windowState
+        ? updateWindow(next, windowState.instanceId, (currentWindow) => ({
+          ...currentWindow,
           activeTool: step?.namespacedName ?? null,
           outcome: null,
-        },
-      };
+        }))
+        : next;
     }
     case "workflow/executing": {
       if (state.workflow.id !== action.workflowId) {
@@ -188,30 +345,37 @@ export function runtimeReducer(
         evidence: current.evidence,
         failureReason: null,
       };
-      return {
+      return updateStepWindow({
         ...state,
         workflow,
-        provider: { ...state.provider, lifecycle: "executing" },
         control: "agent",
-      };
+      }, (windowState) => ({ ...windowState, lifecycle: "executing" }));
     }
     case "workflow/step": {
       if (state.workflow.id !== action.workflowId) {
         return state;
       }
-      const step = state.workflow.steps[action.index] ?? null;
-      return {
-        ...state,
-        workflow: {
-          ...state.workflow,
-          currentStepIndex: action.index,
-          step,
-        },
-        provider: {
-          ...state.provider,
-          activeTool: step?.namespacedName ?? state.provider.activeTool,
-        },
+      const workflow = selectWorkflowStep(state.workflow, action.index);
+      const step = workflow.step;
+      const previous = updateStepWindow(state, settleLifecycle);
+      const next: RuntimeState = {
+        ...previous,
+        workflow,
       };
+      const windowState = step
+        ? findProviderWindow(next, step.providerId)
+        : undefined;
+      return windowState
+        ? focusWindow(
+            updateWindow(next, windowState.instanceId, (currentWindow) => ({
+              ...currentWindow,
+              lifecycle: "executing",
+              activeTool:
+                step?.namespacedName ?? currentWindow.activeTool,
+            })),
+            windowState.instanceId,
+          )
+        : next;
     }
     case "workflow/passed": {
       if (state.workflow.id !== action.workflowId) {
@@ -228,44 +392,38 @@ export function runtimeReducer(
         evidence: action.evidence,
         failureReason: null,
       };
-      return {
+      return updateStepWindow({
         ...state,
         workflow,
-        provider: {
-          ...state.provider,
-          lifecycle: state.provider.placement === "stage" ? "active" : "ready",
-          outcome: "passed",
-        },
         control: "human",
-      };
+      }, (windowState) => ({
+          ...settleLifecycle(windowState),
+          outcome: "passed",
+      }));
     }
     case "workflow/failed":
       if (action.workflowId && state.workflow.id !== action.workflowId) {
         return state;
       }
-      return {
+      return updateStepWindow({
         ...state,
         workflow: toFailedWorkflow(state.workflow, action.reason),
-        provider: {
-          ...state.provider,
-          lifecycle:
-            state.provider.lifecycle === "unmounted"
-              ? "unmounted"
-              : state.provider.placement === "stage"
+        control: "human",
+      }, (windowState) => ({
+          ...windowState,
+          lifecycle: windowState.placement === "stage"
                 ? "active"
-                : state.provider.lifecycle === "mounting" ||
-                    state.provider.lifecycle === "discovering"
+                : windowState.lifecycle === "mounting" ||
+                    windowState.lifecycle === "discovering"
                   ? "failed"
                   : "ready",
           outcome: "failed",
           failureReason:
-            state.provider.lifecycle === "discovering" ||
-            state.provider.lifecycle === "mounting"
+            windowState.lifecycle === "discovering" ||
+            windowState.lifecycle === "mounting"
               ? action.reason
-              : state.provider.failureReason,
-        },
-        control: "human",
-      };
+              : windowState.failureReason,
+      }));
     case "workflow/cancelled": {
       if (state.workflow.id !== action.workflowId) {
         return state;
@@ -284,16 +442,14 @@ export function runtimeReducer(
         evidence: current.evidence,
         failureReason: "cancelled",
       };
-      return {
+      return updateStepWindow({
         ...state,
         workflow,
-        provider: {
-          ...state.provider,
-          lifecycle: state.provider.placement === "stage" ? "active" : "ready",
-          outcome: "cancelled",
-        },
         control: "human",
-      };
+      }, (windowState) => ({
+          ...settleLifecycle(windowState),
+          outcome: "cancelled",
+      }));
     }
     case "workflow/invalidate":
       return {

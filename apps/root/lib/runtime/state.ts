@@ -15,6 +15,30 @@ export type WebmcpStatus = "unknown" | "available" | "unavailable";
 
 export type ControlOwner = "human" | "agent";
 
+export type RuntimeMotion =
+  | { status: "idle" }
+  | {
+      status: "suction";
+      instanceId: string;
+      placement: ProviderPlacement;
+      settle?: "unmount";
+    };
+
+export type ProviderWindow = {
+  providerId: ProviderId;
+  instanceId: string;
+  origin: string;
+  entryUrl: string;
+  lifecycle: ProviderLifecycle;
+  placement: ProviderPlacement;
+  activeTool: string | null;
+  failureReason: GatewayErrorCode | null;
+  outcome: string | null;
+  discoveredTools: NormalizedToolDescriptor[];
+  openedBy: ControlOwner;
+  lastTouchedAt: number;
+};
+
 export type WorkflowDraft = {
   lifecycle: "draft";
   id: null;
@@ -93,22 +117,12 @@ export type RuntimeState = {
   sessionStatus: SessionStatus;
   webmcpStatus: WebmcpStatus;
   account: Account;
-  provider: {
-    providerId: ProviderId | null;
-    instanceId: string | null;
-    origin: string | null;
-    entryUrl: string | null;
-    lifecycle: ProviderLifecycle;
-    placement: ProviderPlacement;
-    activeTool: string | null;
-    failureReason: GatewayErrorCode | null;
-    iframeRevision: number;
-    outcome: string | null;
-  };
-  discoveredTools: NormalizedToolDescriptor[];
+  windows: Record<string, ProviderWindow>;
+  windowOrder: string[];
+  focusedInstanceId: string | null;
   workflow: WorkflowState;
   control: ControlOwner;
-  motion: "idle" | "suction";
+  motion: RuntimeMotion;
 };
 
 export type RuntimeAction =
@@ -121,7 +135,10 @@ export type RuntimeAction =
       instanceId: string;
       origin: string;
       entryUrl: string;
+      openedBy: ControlOwner;
+      touchedAt: number;
     }
+  | { type: "provider/focus"; instanceId: string; touchedAt: number }
   | { type: "provider/loaded"; instanceId: string }
   | { type: "provider/discovering"; instanceId: string }
   | {
@@ -131,11 +148,17 @@ export type RuntimeAction =
     }
   | { type: "provider/active"; instanceId: string }
   | { type: "provider/failed"; instanceId?: string; reason: GatewayErrorCode }
-  | { type: "provider/unmount" }
+  | { type: "provider/unmount"; instanceId: string }
   | { type: "handles/invalidate"; instanceId: string }
-  | { type: "placement/request"; placement: ProviderPlacement }
-  | { type: "motion/start" }
-  | { type: "motion/finish"; placement: ProviderPlacement }
+  | {
+      type: "placement/request";
+      instanceId: string;
+      placement: ProviderPlacement;
+      settle?: "unmount";
+    }
+  | { type: "placement/appear"; instanceId: string }
+  | { type: "motion/finish"; instanceId: string }
+  | { type: "motion/cancel"; instanceId: string }
   | { type: "control/set"; control: ControlOwner }
   | { type: "workflow/draft" }
   | {
@@ -189,25 +212,32 @@ export function createInitialRuntimeState(account: Account): RuntimeState {
     sessionStatus: "authenticated",
     webmcpStatus: "unknown",
     account,
-    provider: {
-      providerId: null,
-      instanceId: null,
-      origin: null,
-      entryUrl: null,
-      lifecycle: "unmounted",
-      placement: "stage",
-      activeTool: null,
-      failureReason: null,
-      iframeRevision: 0,
-      outcome: null,
-    },
-    discoveredTools: [],
+    windows: {},
+    windowOrder: [],
+    focusedInstanceId: null,
     workflow: createDraftWorkflow(),
     control: "human",
-    motion: "idle",
+    motion: { status: "idle" },
   };
 }
 
 export function emptyWorkflow() {
   return createDraftWorkflow();
+}
+
+export function findProviderWindow(
+  state: RuntimeState,
+  providerId: ProviderId,
+): ProviderWindow | undefined {
+  return Object.values(state.windows).find(
+    (windowState) => windowState.providerId === providerId,
+  );
+}
+
+export function focusedProviderWindow(
+  state: RuntimeState,
+): ProviderWindow | undefined {
+  return state.focusedInstanceId
+    ? state.windows[state.focusedInstanceId]
+    : undefined;
 }
