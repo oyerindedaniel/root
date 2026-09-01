@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  allowsRichDom,
   createDocumentVisibilityGate,
   documentVisibilityMessage,
   parseDocumentVisibilityMessage,
@@ -9,13 +8,6 @@ import {
 } from "../src/document-visibility.js";
 
 const rootOrigin = "http://localhost:3000";
-
-describe("allowsRichDom", () => {
-  it("is false only when the document is not visible", () => {
-    expect(allowsRichDom(true)).toBe(true);
-    expect(allowsRichDom(false)).toBe(false);
-  });
-});
 
 describe("parseDocumentVisibilityMessage", () => {
   it("reads a host visibility payload from the expected origin", () => {

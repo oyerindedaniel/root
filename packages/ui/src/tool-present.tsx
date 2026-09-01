@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fillPresentedInput } from "./lib/fill-input";
+import { coeditMessage } from "@repo/contracts";
+
+import {
+  fillPresentedInput,
+  TOOL_PRESENT_PREVIEW_MS,
+  waitPresent,
+  type FillPresentResult,
+} from "./lib/fill-input";
 
 export type ToolPresentGate = {
   applyMessage: (
@@ -11,16 +18,32 @@ export type ToolPresentGate = {
   shouldPresent: () => boolean;
 };
 
+function abortError(signal?: AbortSignal) {
+  if (signal?.reason instanceof DOMException) {
+    return signal.reason;
+  }
+  return new DOMException("Aborted", "AbortError");
+}
+
 export function useToolPresent(options: {
   rootOrigin: string;
   gate: ToolPresentGate;
 }) {
   const { rootOrigin, gate } = options;
   const gateRef = useRef(gate);
-  gateRef.current = gate;
   const armedRef = useRef(false);
+  const coeditPostedRef = useRef(false);
+  const persistWaiterRef = useRef<{
+    resolve: () => void;
+    dispose: () => void;
+  } | null>(null);
   const firstHitRef = useRef<HTMLLIElement | null>(null);
   const [hitId, setHitId] = useState<string | null>(null);
+  const [intent, setIntent] = useState(false);
+
+  useEffect(() => {
+    gateRef.current = gate;
+  }, [gate]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -63,20 +86,83 @@ export function useToolPresent(options: {
     setHitId(null);
   }, []);
 
+  const setCoedit = useCallback(
+    (open: boolean) => {
+      if (window.parent === window) {
+        return;
+      }
+      if (open && !armedRef.current) {
+        return;
+      }
+      if (!open && !coeditPostedRef.current) {
+        return;
+      }
+      window.parent.postMessage(coeditMessage(open), rootOrigin);
+      coeditPostedRef.current = open;
+    },
+    [rootOrigin],
+  );
+
+  const persist = useCallback(() => {
+    const waiter = persistWaiterRef.current;
+    if (waiter) {
+      waiter.dispose();
+      persistWaiterRef.current = null;
+      waiter.resolve();
+      return true;
+    }
+    return armedRef.current;
+  }, []);
+
+  const waitForPersist = useCallback(async (options?: { signal?: AbortSignal }) => {
+    if (!armedRef.current || !gateRef.current.shouldPresent()) {
+      return;
+    }
+    setIntent(true);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const signal = options?.signal;
+        if (signal?.aborted) {
+          reject(abortError(signal));
+          return;
+        }
+        const dispose = () => {
+          signal?.removeEventListener("abort", onAbort);
+        };
+        const onAbort = () => {
+          persistWaiterRef.current = null;
+          dispose();
+          reject(abortError(signal));
+        };
+        persistWaiterRef.current = {
+          resolve: () => {
+            dispose();
+            resolve();
+          },
+          dispose,
+        };
+        signal?.addEventListener("abort", onAbort, { once: true });
+      });
+    } finally {
+      persistWaiterRef.current = null;
+      setIntent(false);
+    }
+  }, []);
+
   const fill = useCallback(
     async (options: {
       text: string;
       setValue: (value: string) => void;
       input: HTMLInputElement | null;
       signal?: AbortSignal;
-    }) => {
+    }): Promise<FillPresentResult | undefined> => {
       if (!armedRef.current || !gateRef.current.shouldPresent()) {
         return;
       }
       const instant = window.matchMedia(
         "(prefers-reduced-motion: reduce)",
       ).matches;
-      await fillPresentedInput({
+      return fillPresentedInput({
         text: options.text,
         setValue: options.setValue,
         input: options.input,
@@ -87,5 +173,32 @@ export function useToolPresent(options: {
     [],
   );
 
-  return { arm, commit, clear, fill, hitId, firstHitRef };
+  const preview = useCallback(async (options?: { signal?: AbortSignal }) => {
+    if (!armedRef.current || !gateRef.current.shouldPresent()) {
+      return;
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    setIntent(true);
+    try {
+      await waitPresent(TOOL_PRESENT_PREVIEW_MS, options?.signal);
+    } finally {
+      setIntent(false);
+    }
+  }, []);
+
+  return {
+    arm,
+    commit,
+    clear,
+    fill,
+    preview,
+    setCoedit,
+    persist,
+    waitForPersist,
+    intent,
+    hitId,
+    firstHitRef,
+  };
 }

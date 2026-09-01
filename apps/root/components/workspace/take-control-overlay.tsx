@@ -9,14 +9,16 @@ const INTRO_MS = 2000;
 
 export function TakeControlOverlay({
   pointerInside,
+  passThrough,
   onTakeControl,
 }: {
   pointerInside: boolean;
+  passThrough: boolean;
   onTakeControl: () => void;
 }) {
   const reduceMotion = useReducedMotion();
   const [introElapsed, setIntroElapsed] = useState(false);
-  const showPill = !introElapsed || pointerInside;
+  const showPill = passThrough || !introElapsed || pointerInside;
 
   useEffect(() => {
     setIntroElapsed(false);
@@ -27,8 +29,18 @@ export function TakeControlOverlay({
   }, []);
 
   return (
-    <div className="pointer-events-auto absolute inset-0 z-10">
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+    <div
+      className={cn(
+        "absolute inset-0 z-10",
+        passThrough ? "pointer-events-none" : "pointer-events-auto",
+      )}
+    >
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 flex justify-center",
+          passThrough ? "items-end pb-3" : "items-center",
+        )}
+      >
         <div
           className={cn(
             "relative",
@@ -44,7 +56,7 @@ export function TakeControlOverlay({
           )}
         >
           <span className="pointer-events-none absolute -inset-px overflow-hidden rounded-3xl">
-            <span className="take-control-ring absolute inset-[-40%]" />
+            <span className="present-halo take-control-ring absolute inset-[-40%]" />
           </span>
           <button
             type="button"

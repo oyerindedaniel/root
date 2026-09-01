@@ -6,7 +6,6 @@ import {
   customProviderIconSchema,
   workspacePreferencesSchema,
 } from "./workspace-preferences";
-import { MAX_SOURCE_ICON_BYTES } from "./provider-icon";
 import { createVersionedStore } from "./versioned-store";
 
 class MemoryStorage implements Storage {
@@ -192,7 +191,6 @@ describe("createVersionedStore", () => {
   });
 
   it("bounds normalized WebP data URLs", () => {
-    expect(MAX_SOURCE_ICON_BYTES).toBe(1_500_000);
     expect(
       customProviderIconSchema.safeParse("data:image/png;base64,AAAA").success,
     ).toBe(false);

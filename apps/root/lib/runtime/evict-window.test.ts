@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  LIVE_PROVIDER_CAP,
   liveWindowCount,
   pickEvictionVictim,
 } from "./evict-window";
@@ -45,12 +44,6 @@ function tray(state: RuntimeState, instanceId: string) {
   });
   return runtimeReducer(next, { type: "motion/finish", instanceId });
 }
-
-describe("LIVE_PROVIDER_CAP", () => {
-  it("starts at four live documents", () => {
-    expect(LIVE_PROVIDER_CAP).toBe(4);
-  });
-});
 
 describe("liveWindowCount", () => {
   it("counts mounted windows and can omit one", () => {

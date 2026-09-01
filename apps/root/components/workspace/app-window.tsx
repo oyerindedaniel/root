@@ -29,6 +29,7 @@ export function AppWindowRoot({
   onMinimize,
   onTakeControl,
   leased = false,
+  coeditOpen = false,
   children,
 }: PropsWithChildren<{
   providerId: string;
@@ -45,6 +46,7 @@ export function AppWindowRoot({
   onMinimize: () => void;
   onTakeControl?: () => void;
   leased?: boolean;
+  coeditOpen?: boolean;
 }>) {
   const onStage = placement === "stage";
   const interactive = onStage && !suctioning;
@@ -129,6 +131,7 @@ export function AppWindowRoot({
         {showTakeControl && onTakeControl ? (
           <TakeControlOverlay
             pointerInside={pointerInside}
+            passThrough={coeditOpen}
             onTakeControl={onTakeControl}
           />
         ) : null}

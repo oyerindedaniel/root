@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 
 import { BusySpinner } from "./busy-spinner";
 import { cn } from "./lib/cn";
+import { PresentHalo } from "./present-halo";
 
 export const buttonVariants = cva(
   "inline-flex h-8 w-fit shrink-0 cursor-pointer items-center justify-center gap-2 self-start rounded-3xl px-4 text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
@@ -25,6 +26,7 @@ export const buttonVariants = cva(
 export type ButtonProps = ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     pending?: boolean;
+    intent?: boolean;
   };
 
 export function Button({
@@ -32,26 +34,30 @@ export function Button({
   variant,
   type = "button",
   pending = false,
+  intent = false,
   disabled,
   children,
   ...props
 }: ButtonProps) {
   return (
-    <button
-      type={type}
-      className={cn(buttonVariants({ variant }), className)}
-      disabled={disabled || pending}
-      aria-busy={pending || undefined}
-      {...props}
-    >
-      {pending ? (
-        <>
-          <BusySpinner />
-          {children}
-        </>
-      ) : (
-        children
-      )}
-    </button>
+    <span className="relative inline-flex w-fit self-start">
+      <PresentHalo active={intent} rounded="3xl" />
+      <button
+        type={type}
+        className={cn("relative", buttonVariants({ variant }), className)}
+        disabled={disabled || pending}
+        aria-busy={pending || undefined}
+        {...props}
+      >
+        {pending ? (
+          <>
+            <BusySpinner />
+            {children}
+          </>
+        ) : (
+          children
+        )}
+      </button>
+    </span>
   );
 }

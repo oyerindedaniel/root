@@ -5,6 +5,7 @@ import {
   boundedSuccess,
   documentVisibilityMessage,
   GatewayError,
+  parseCoeditMessage,
   type Account,
   type BoundedError,
   type BoundedResultEnvelope,
@@ -954,6 +955,10 @@ function ProviderWindowHost({
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [windowSession] = useState(createWindowSession);
+  const [coeditOpen, setCoeditOpen] = useState(false);
+  if (windowState.control !== "agent" && coeditOpen) {
+    setCoeditOpen(false);
+  }
   const reduceMotion = useReducedMotion();
   const previousPlacementRef = useRef(windowState.placement);
   const layoutRafRef = useRef(0);
@@ -1154,6 +1159,25 @@ function ProviderWindowHost({
     );
   }, [windowState.origin, windowState.placement]);
 
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) {
+        return;
+      }
+      const open = parseCoeditMessage(
+        event.data,
+        event.origin,
+        windowState.origin,
+      );
+      if (open === null) {
+        return;
+      }
+      setCoeditOpen(open);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [windowState.origin]);
+
   return (
     <AppWindow.Root
       providerId={windowState.providerId}
@@ -1181,6 +1205,7 @@ function ProviderWindowHost({
         getTrayTarget(windowState.providerId)?.restoreButton?.focus();
       }}
       leased={windowState.control === "agent"}
+      coeditOpen={coeditOpen}
       onTakeControl={() => onTakeControl(windowState.instanceId)}
     >
       <iframe
@@ -1191,6 +1216,7 @@ function ProviderWindowHost({
         className="size-full border-0"
         onFocus={() => onFocus(windowState.instanceId)}
         onLoad={() => {
+          setCoeditOpen(false);
           postDocumentVisibility(
             iframeRef.current,
             windowState.origin,

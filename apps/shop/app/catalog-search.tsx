@@ -91,20 +91,36 @@ export function CatalogSearch() {
             parseToolExecuteInput(input),
           );
           present.arm();
+          present.setCoedit(true);
           try {
-            await present.fill({
+            const filled = await present.fill({
               text: parsed.query,
               setValue: setQuery,
               input: queryInputRef.current,
               signal: options.signal,
             });
+            if (filled?.yielded) {
+              await present.waitForPersist({ signal: options.signal });
+            } else {
+              await present.preview({ signal: options.signal });
+              const live =
+                queryInputRef.current?.value ?? filled?.text ?? parsed.query;
+              if (filled && live !== filled.text) {
+                await present.waitForPersist({ signal: options.signal });
+              }
+            }
             options.signal?.throwIfAborted();
-            const result = await runSearch(parsed.query, options.signal);
+            present.setCoedit(false);
+            const submitted =
+              queryInputRef.current?.value ?? filled?.text ?? parsed.query;
+            const result = await runSearch(submitted, options.signal);
             present.commit(result.products[0]?.id ?? null);
             return result;
           } catch (caught) {
             present.commit(null);
             throw caught;
+          } finally {
+            present.setCoedit(false);
           }
         },
       },
@@ -114,7 +130,15 @@ export function CatalogSearch() {
       },
     );
     return () => controller.abort();
-  }, [present.arm, present.commit, present.fill, runSearch]);
+  }, [
+    present.arm,
+    present.commit,
+    present.fill,
+    present.preview,
+    present.setCoedit,
+    present.waitForPersist,
+    runSearch,
+  ]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
@@ -128,6 +152,9 @@ export function CatalogSearch() {
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
+          if (present.persist()) {
+            return;
+          }
           void runSearch(query).catch(() => undefined);
         }}
       >
@@ -140,7 +167,7 @@ export function CatalogSearch() {
             name="query"
           />
         </Label>
-        <Button type="submit">
+        <Button type="submit" intent={present.intent}>
           <MagnifyingGlassIcon className="size-4" />
           Search
         </Button>
