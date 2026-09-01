@@ -15,6 +15,7 @@ import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
+import { PresentAsk } from "@repo/ui/present-ask";
 import { SearchHit } from "@repo/ui/search-hit";
 import { useToolPresent } from "@repo/ui/tool-present";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -114,8 +115,12 @@ export function CasesSearch() {
             const submitted =
               queryInputRef.current?.value ?? filled?.text ?? parsed.query;
             const result = await runSearch(submitted, options.signal);
-            present.commit(result.cases[0]?.id ?? null);
-            return result;
+            const selectedId = await present.waitForSelect({
+              candidateId: result.cases[0]?.id ?? null,
+              signal: options.signal,
+            });
+            present.commit(selectedId ?? result.cases[0]?.id ?? null);
+            return selectedId ? { ...result, selectedId } : result;
           } catch (caught) {
             present.commit(null);
             throw caught;
@@ -137,6 +142,7 @@ export function CasesSearch() {
     present.preview,
     present.setCoedit,
     present.waitForPersist,
+    present.waitForSelect,
     runSearch,
   ]);
 
@@ -192,12 +198,16 @@ export function CasesSearch() {
       {status === "success" && cases.length === 0 ? (
         <p className="text-base text-muted-foreground">No matching cases.</p>
       ) : null}
+      {present.choosing ? <PresentAsk>Pick a case.</PresentAsk> : null}
       <ul className="flex flex-col gap-3">
         {cases.map((supportCase, index) => (
           <SearchHit
             key={supportCase.id}
             ref={index === 0 ? present.firstHitRef : undefined}
             revealed={present.hitId === supportCase.id}
+            onSelect={
+              present.choosing ? () => present.choose(supportCase.id) : undefined
+            }
           >
             <p className="text-base font-medium">{supportCase.title}</p>
             <p className="mt-1 text-base text-muted-foreground">

@@ -6,6 +6,8 @@ import {
   documentVisibilityMessage,
   GatewayError,
   parseCoeditMessage,
+  parsePendingHumanMessage,
+  PENDING_HUMAN_TIMEOUT_MS,
   type Account,
   type BoundedError,
   type BoundedResultEnvelope,
@@ -66,7 +68,13 @@ import {
 import { executePass } from "@/lib/runtime/execute-pass";
 import { GatewayRegistrar } from "@/lib/runtime/gateway-registrar";
 import { invokeGrantedTool as runGrantedTool } from "@/lib/runtime/invoke-granted";
-import { abortErrorCode, STOPPED_BY_USER, stoppedByUserAbort } from "@/lib/runtime/cancellation";
+import {
+  abortErrorCode,
+  abortErrorMessage,
+  noResponseAbort,
+  stoppedByUserAbort,
+} from "@/lib/runtime/cancellation";
+import { setPendingHumanTimer } from "@/lib/runtime/pending-human-timeout";
 import {
   abortInstance,
   adoptInstanceAbort,
@@ -140,6 +148,8 @@ export function RuntimeProvider({
     account,
     createInitialRuntimeState,
   );
+  const [humanPendingIds, setHumanPendingIds] = useState<string[]>([]);
+  const waitingOnHuman = humanPendingIds.length > 0;
   const stateRef = useRef(state);
 
   useIsomorphicLayoutEffect(() => {
@@ -150,6 +160,9 @@ export function RuntimeProvider({
   const executionAbortRef = useRef<AbortController | null>(null);
   const operationLeasesRef = useRef(new Set<string>());
   const instanceAbortsRef = useRef(new Map<string, AbortController>());
+  const pendingHumanTimersRef = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
   const windowSessionsRef = useRef(new Map<string, WindowSession>());
   const pendingFillRef = useRef(new Set<string>());
   const loadWaitersRef = useRef(new Map<string, LoadWaiter>());
@@ -354,9 +367,7 @@ export function RuntimeProvider({
         if (abortCode) {
           return boundedError(
             abortCode,
-            abortCode === STOPPED_BY_USER
-              ? "Capability discovery was stopped by the user."
-              : "Capability discovery was cancelled.",
+            abortErrorMessage(abortCode, "Capability discovery"),
           );
         }
         if (instanceId) {
@@ -396,6 +407,27 @@ export function RuntimeProvider({
       instanceId,
       stoppedByUserAbort(),
     );
+  }, []);
+
+  const onHumanPending = useCallback((instanceId: string, open: boolean) => {
+    setPendingHumanTimer(
+      pendingHumanTimersRef.current,
+      instanceId,
+      open,
+      (id) => {
+        abortInstance(instanceAbortsRef.current, id, noResponseAbort());
+      },
+      PENDING_HUMAN_TIMEOUT_MS,
+    );
+    setHumanPendingIds((current) => {
+      if (open) {
+        if (current.includes(instanceId)) {
+          return current;
+        }
+        return [...current, instanceId];
+      }
+      return current.filter((id) => id !== instanceId);
+    });
   }, []);
 
   const listProviders = useCallback(
@@ -841,6 +873,8 @@ export function RuntimeProvider({
       activateProvider,
       registerTrayTarget,
       testProvider,
+      waitingOnHuman,
+      waitingInstanceIds: humanPendingIds,
     }),
     [
       account,
@@ -850,6 +884,8 @@ export function RuntimeProvider({
       registerTrayTarget,
       testProvider,
       state,
+      waitingOnHuman,
+      humanPendingIds,
     ],
   );
 
@@ -883,6 +919,7 @@ export function RuntimeProvider({
                 onMotionCancel={cancelPlacement}
                 onClose={closeProvider}
                 onTakeControl={takeControl}
+                onHumanPending={onHumanPending}
                 onSessionBind={bindWindowSession}
                 onSessionUnbind={unbindWindowSession}
                 onTakePendingFill={takePendingFill}
@@ -926,6 +963,7 @@ function ProviderWindowHost({
   onMotionCancel,
   onClose,
   onTakeControl,
+  onHumanPending,
   onSessionBind,
   onSessionUnbind,
   onTakePendingFill,
@@ -948,6 +986,7 @@ function ProviderWindowHost({
   onMotionCancel: (instanceId: string) => void;
   onClose: (instanceId: string) => void;
   onTakeControl: (instanceId: string) => void;
+  onHumanPending: (instanceId: string, open: boolean) => void;
   onSessionBind: (instanceId: string, session: WindowSession) => void;
   onSessionUnbind: (instanceId: string) => void;
   onTakePendingFill: (instanceId: string) => boolean;
@@ -1160,23 +1199,36 @@ function ProviderWindowHost({
   }, [windowState.origin, windowState.placement]);
 
   useEffect(() => {
+    if (windowState.control !== "agent") {
+      onHumanPending(windowState.instanceId, false);
+    }
+  }, [onHumanPending, windowState.control, windowState.instanceId]);
+
+  useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) {
         return;
       }
-      const open = parseCoeditMessage(
+      const coedit = parseCoeditMessage(
         event.data,
         event.origin,
         windowState.origin,
       );
-      if (open === null) {
-        return;
+      if (coedit !== null) {
+        setCoeditOpen(coedit);
       }
-      setCoeditOpen(open);
+      const pending = parsePendingHumanMessage(
+        event.data,
+        event.origin,
+        windowState.origin,
+      );
+      if (pending !== null) {
+        onHumanPending(windowState.instanceId, pending);
+      }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [windowState.origin]);
+  }, [onHumanPending, windowState.instanceId, windowState.origin]);
 
   return (
     <AppWindow.Root
@@ -1217,6 +1269,7 @@ function ProviderWindowHost({
         onFocus={() => onFocus(windowState.instanceId)}
         onLoad={() => {
           setCoeditOpen(false);
+          onHumanPending(windowState.instanceId, false);
           postDocumentVisibility(
             iframeRef.current,
             windowState.origin,

@@ -17,7 +17,7 @@ import { getProvider, type ProviderCatalog } from "@/lib/providers/catalog";
 import { executeRegisteredTool } from "@/lib/webmcp/execute";
 import { validateJsonSchemaInput } from "@/lib/webmcp/json-schema-validator";
 
-import { abortErrorCode, STOPPED_BY_USER } from "./cancellation";
+import { abortErrorCode, abortErrorMessage } from "./cancellation";
 import { findProviderWindow, type RuntimeState } from "./state";
 
 export type InvokeGrantedDependencies = {
@@ -170,12 +170,7 @@ export async function invokeGrantedTool(options: {
   } catch (error) {
     const code = abortErrorCode(error, operationSignal);
     if (code) {
-      return boundedError(
-        code,
-        code === STOPPED_BY_USER
-          ? "Tool invocation was stopped by the user."
-          : "Tool invocation was cancelled.",
-      );
+      return boundedError(code, abortErrorMessage(code, "Tool invocation"));
     }
     return boundedError("execution_failed", "Tool invocation failed.");
   } finally {

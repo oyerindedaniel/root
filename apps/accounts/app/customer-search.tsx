@@ -15,6 +15,7 @@ import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
+import { PresentAsk } from "@repo/ui/present-ask";
 import { SearchHit } from "@repo/ui/search-hit";
 import { useToolPresent } from "@repo/ui/tool-present";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -116,8 +117,12 @@ export function CustomerSearch() {
             const submitted =
               queryInputRef.current?.value ?? filled?.text ?? parsed.query;
             const result = await runSearch(submitted, options.signal);
-            present.commit(result.customers[0]?.id ?? null);
-            return result;
+            const selectedId = await present.waitForSelect({
+              candidateId: result.customers[0]?.id ?? null,
+              signal: options.signal,
+            });
+            present.commit(selectedId ?? result.customers[0]?.id ?? null);
+            return selectedId ? { ...result, selectedId } : result;
           } catch (caught) {
             present.commit(null);
             throw caught;
@@ -139,6 +144,7 @@ export function CustomerSearch() {
     present.preview,
     present.setCoedit,
     present.waitForPersist,
+    present.waitForSelect,
     runSearch,
   ]);
 
@@ -194,12 +200,16 @@ export function CustomerSearch() {
       {status === "success" && customers.length === 0 ? (
         <p className="text-base text-muted-foreground">No matching customers.</p>
       ) : null}
+      {present.choosing ? <PresentAsk>Pick a customer.</PresentAsk> : null}
       <ul className="flex flex-col gap-3">
         {customers.map((customer, index) => (
           <SearchHit
             key={customer.id}
             ref={index === 0 ? present.firstHitRef : undefined}
             revealed={present.hitId === customer.id}
+            onSelect={
+              present.choosing ? () => present.choose(customer.id) : undefined
+            }
           >
             <p className="text-base font-medium">{customer.name}</p>
             <p className="mt-1 font-mono text-base text-muted-foreground">

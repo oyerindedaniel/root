@@ -50,6 +50,31 @@ export function waitPresent(ms: number, signal?: AbortSignal) {
   });
 }
 
+export function waitForChoice(options: {
+  signal?: AbortSignal;
+  bind: (choose: (id: string) => void) => () => void;
+}) {
+  return new Promise<string>((resolve, reject) => {
+    const signal = options.signal;
+    if (signal?.aborted) {
+      reject(abortError(signal));
+      return;
+    }
+    let unbind = () => {};
+    const onAbort = () => {
+      unbind();
+      signal?.removeEventListener("abort", onAbort);
+      reject(abortError(signal));
+    };
+    unbind = options.bind((id) => {
+      unbind();
+      signal?.removeEventListener("abort", onAbort);
+      resolve(id);
+    });
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 function writeInput(input: FillInputNode | null, value: string) {
   if (input && "value" in input) {
     input.value = value;

@@ -22,6 +22,7 @@ import { useProviderLibrary } from "@/lib/providers/provider-library";
 import { useRuntime } from "@/lib/runtime/runtime-context";
 import {
   focusedProviderWindow,
+  waitingProviderIds,
   type RuntimeState,
 } from "@/lib/runtime/state";
 import {
@@ -59,7 +60,7 @@ function positionedCanvas(node: HTMLElement | null) {
 }
 
 export function WorkflowStatus() {
-  const { state } = useRuntime();
+  const { state, waitingOnHuman, waitingInstanceIds } = useRuntime();
   const { catalog } = useProviderLibrary();
   const reduceMotion = useReducedMotion();
   const x = useMotionValue(0);
@@ -73,8 +74,12 @@ export function WorkflowStatus() {
   const dragging = useRef(false);
   const hadLabel = useRef(false);
   const providerWindow = focusedProviderWindow(state);
-  const { running, failed } = indicatorActivity(state, issueHidden);
-  const nextLabel = pillLabel(state, catalog, running, failed);
+  const { running, failed } = indicatorActivity(
+    state,
+    issueHidden,
+    waitingOnHuman,
+  );
+  const nextLabel = pillLabel(state, catalog, running, failed, waitingOnHuman);
   const [content, setContent] = useState<{
     label: string;
     running: boolean;
@@ -216,7 +221,7 @@ export function WorkflowStatus() {
     snapFromPointer();
   }
 
-  const rows = inspectRows(state, catalog);
+  const rows = inspectRows(state, catalog, waitingInstanceIds);
 
   return (
     <motion.div
@@ -385,15 +390,20 @@ export function WorkflowStatus() {
   );
 }
 
-function indicatorActivity(state: RuntimeState, issueHidden: boolean) {
+function indicatorActivity(
+  state: RuntimeState,
+  issueHidden: boolean,
+  waitingOnHuman: boolean,
+) {
   const provider = focusedProviderWindow(state);
   const workflow = state.workflow.lifecycle;
   return {
     running:
-      workflow === "executing" ||
-      provider?.lifecycle === "mounting" ||
-      provider?.lifecycle === "discovering" ||
-      provider?.lifecycle === "executing",
+      !waitingOnHuman &&
+      (workflow === "executing" ||
+        provider?.lifecycle === "mounting" ||
+        provider?.lifecycle === "discovering" ||
+        provider?.lifecycle === "executing"),
     failed:
       !issueHidden &&
       (workflow === "failed" || provider?.lifecycle === "failed"),
@@ -430,9 +440,13 @@ function pillLabel(
   catalog: ProviderCatalog,
   running: boolean,
   failed: boolean,
+  waitingOnHuman: boolean,
 ) {
   if (failed) {
     return "Failed";
+  }
+  if (waitingOnHuman) {
+    return "Waiting on you";
   }
   if (!running) {
     return null;
@@ -452,12 +466,25 @@ function pillLabel(
   return "Running";
 }
 
-function inspectRows(state: RuntimeState, catalog: ProviderCatalog) {
+function inspectRows(
+  state: RuntimeState,
+  catalog: ProviderCatalog,
+  pendingInstanceIds: string[],
+) {
   const providerWindow = focusedProviderWindow(state);
   const provider = currentProvider(catalog, providerWindow?.providerId ?? null);
   const query = state.workflow.step?.arguments.query ?? null;
+  const waiting = waitingProviderIds(state, pendingInstanceIds).flatMap(
+    (providerId) => {
+      const waitingProvider = currentProvider(catalog, providerId);
+      return waitingProvider ? [waitingProvider.label] : [];
+    },
+  );
   const rows: { label: string; value: string }[] = [
     { label: "Provider", value: provider?.label ?? "None" },
+    ...(waiting.length
+      ? [{ label: "Waiting", value: waiting.join(", ") }]
+      : []),
     {
       label: "App",
       value:

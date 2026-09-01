@@ -250,3 +250,34 @@ export function focusedProviderWindow(
     ? state.windows[state.focusedInstanceId]
     : undefined;
 }
+
+export function waitingProviderIds(
+  state: RuntimeState,
+  pendingInstanceIds: string[],
+): ProviderId[] {
+  const ids: ProviderId[] = [];
+  const seen = new Set<ProviderId>();
+  for (const instanceId of pendingInstanceIds) {
+    const windowState = state.windows[instanceId];
+    if (!windowState || seen.has(windowState.providerId)) {
+      continue;
+    }
+    seen.add(windowState.providerId);
+    ids.push(windowState.providerId);
+  }
+  return ids;
+}
+
+export function dockPendingCue(
+  windowState: ProviderWindow | undefined,
+  pendingInstanceIds: string[],
+  focusedInstanceId: string | null,
+) {
+  if (!windowState || !pendingInstanceIds.includes(windowState.instanceId)) {
+    return false;
+  }
+  if (windowState.placement === "tray") {
+    return true;
+  }
+  return windowState.instanceId !== focusedInstanceId;
+}

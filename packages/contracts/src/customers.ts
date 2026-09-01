@@ -18,6 +18,7 @@ export const searchCustomersOutputSchema = z.object({
   status: z.literal("success"),
   query: z.string().min(1).max(120),
   customers: z.array(customerSchema).max(12),
+  selectedId: z.string().min(1).max(64).optional(),
 });
 
 export type SearchCustomersOutput = z.infer<typeof searchCustomersOutputSchema>;

@@ -3,7 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import type { Account } from "@repo/contracts";
-
+import { PresentHalo } from "@repo/ui/present-halo";
 import {
   Tooltip,
   TooltipContent,
@@ -30,6 +30,7 @@ import {
 } from "@/lib/providers/provider-library";
 import type { DockReference } from "@/lib/storage/workspace-preferences";
 import { useRuntime } from "@/lib/runtime/runtime-context";
+import { dockPendingCue } from "@/lib/runtime/state";
 import { RuntimeProvider } from "@/lib/runtime/runtime-provider";
 
 export function WorkspaceShell({
@@ -58,6 +59,7 @@ function WorkspaceDock() {
     state,
     activateProvider,
     registerTrayTarget,
+    waitingInstanceIds,
   } = useRuntime();
   const { catalog, preferences, pin, unpin } = useProviderLibrary();
   const reduceMotion = useReducedMotion();
@@ -175,6 +177,11 @@ function WorkspaceDock() {
           (windowState) => windowState.providerId === app.id,
         );
         const mounted = Boolean(providerWindow);
+        const pendingCue = dockPendingCue(
+          providerWindow,
+          waitingInstanceIds,
+          state.focusedInstanceId,
+        );
         return (
           <Dock.Item
             key={`${app.kind}:${app.id}`}
@@ -242,12 +249,13 @@ function WorkspaceDock() {
                 onDragEndCapture={finishDrag}
                 onClick={() => activateProvider(app.id)}
               >
+                <PresentHalo active={pendingCue} rounded="dock" />
                 <img
                   src={app.icon}
                   alt=""
                   width={DOCK_ICON_SIZE}
                   height={DOCK_ICON_SIZE}
-                  className="pointer-events-none size-full select-none"
+                  className="pointer-events-none relative size-full select-none"
                 />
                 {mounted ? (
                   <span

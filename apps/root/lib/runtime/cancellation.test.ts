@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   abortErrorCode,
+  abortErrorMessage,
   CANCELLED,
   isCancellation,
+  isNoResponse,
   isStoppedByUser,
+  NO_RESPONSE,
+  noResponseAbort,
   STOPPED_BY_USER,
   stoppedByUserAbort,
 } from "./cancellation";
@@ -48,10 +52,24 @@ describe("stopped by user", () => {
     expect(abortErrorCode(undefined, controller.signal)).toBe(STOPPED_BY_USER);
   });
 
+  it("classifies a pending-on-human timeout before generic cancel", () => {
+    const controller = new AbortController();
+    controller.abort(noResponseAbort());
+    expect(isNoResponse(undefined, controller.signal)).toBe(true);
+    expect(isStoppedByUser(undefined, controller.signal)).toBe(false);
+    expect(abortErrorCode(undefined, controller.signal)).toBe(NO_RESPONSE);
+  });
+
   it("keeps a generic abort as cancelled", () => {
     const controller = new AbortController();
     controller.abort(new DOMException("Cancelled", "AbortError"));
     expect(isStoppedByUser(undefined, controller.signal)).toBe(false);
     expect(abortErrorCode(undefined, controller.signal)).toBe(CANCELLED);
+    expect(abortErrorMessage(NO_RESPONSE, "Workflow")).not.toBe(
+      abortErrorMessage(STOPPED_BY_USER, "Workflow"),
+    );
+    expect(abortErrorMessage(NO_RESPONSE, "Workflow")).not.toBe(
+      abortErrorMessage(CANCELLED, "Workflow"),
+    );
   });
 });

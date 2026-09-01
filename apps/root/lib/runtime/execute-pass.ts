@@ -15,7 +15,13 @@ import {
 } from "@repo/contracts";
 
 import { executeRegisteredTool } from "../webmcp/execute";
-import { abortErrorCode, CANCELLED, STOPPED_BY_USER } from "./cancellation";
+import {
+  abortErrorCode,
+  abortErrorMessage,
+  CANCELLED,
+  NO_RESPONSE,
+  STOPPED_BY_USER,
+} from "./cancellation";
 import { parsePassToolResult } from "./pass-tools";
 import { revalidatePreparedStep } from "./prepare";
 import {
@@ -104,6 +110,7 @@ export async function executePass(options: {
         if (discovered.status === "error") {
           if (
             discovered.code === STOPPED_BY_USER ||
+            discovered.code === NO_RESPONSE ||
             discovered.code === CANCELLED
           ) {
             dependencies.dispatch({
@@ -212,12 +219,7 @@ export async function executePass(options: {
         workflowId: input.workflowId,
         reason: code,
       });
-      return boundedError(
-        code,
-        code === STOPPED_BY_USER
-          ? "Workflow was stopped by the user."
-          : "Workflow was cancelled.",
-      );
+      return boundedError(code, abortErrorMessage(code, "Workflow"));
     }
     if (error instanceof GatewayError) {
       dependencies.dispatch({

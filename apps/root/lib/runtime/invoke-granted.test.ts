@@ -387,4 +387,19 @@ describe("invokeGrantedTool", () => {
     });
     expect(current.releaseOperation).toHaveBeenCalledOnce();
   });
+
+  it("returns no_response when the adopted instance signal is a pending timeout", async () => {
+    const current = setup();
+    const adopted = new AbortController();
+    current.dependencies.adoptAbort = () => adopted.signal;
+    current.dependencies.discover = async () => {
+      adopted.abort(new DOMException("no_response", "AbortError"));
+      throw new DOMException("no_response", "AbortError");
+    };
+    await expect(invoke(current.dependencies)).resolves.toMatchObject({
+      status: "error",
+      code: "no_response",
+    });
+    expect(current.releaseOperation).toHaveBeenCalledOnce();
+  });
 });

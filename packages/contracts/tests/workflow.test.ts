@@ -431,6 +431,9 @@ describe("gateway envelopes", () => {
     expect(
       boundedError("stopped_by_user", "The human took control.").code,
     ).toBe("stopped_by_user");
+    expect(
+      boundedError("no_response", "The human did not respond.").code,
+    ).toBe("no_response");
     expect(() => boundedError("not_a_code" as never, "Nope.")).toThrow();
   });
 

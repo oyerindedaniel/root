@@ -302,6 +302,22 @@ describe("executePass", () => {
     expect(harness.getState().workflow.failureReason).toBe("stopped_by_user");
   });
 
+  it("returns no_response when the pending-on-human wait times out", async () => {
+    const harness = createHarness([productStep]);
+    const controller = new AbortController();
+    harness.dependencies.discover = async (_providerId, signal) => {
+      controller.abort(new DOMException("no_response", "AbortError"));
+      signal.throwIfAborted();
+      return boundedError("discovery_failed", "unreachable");
+    };
+
+    const result = await run(harness, controller.signal);
+
+    expect(result.status === "error" ? result.code : null).toBe("no_response");
+    expect(harness.getState().workflow.lifecycle).toBe("cancelled");
+    expect(harness.getState().workflow.failureReason).toBe("no_response");
+  });
+
   it("fails malformed tool output", async () => {
     const harness = createHarness([productStep]);
     harness.dependencies.executeTool = async () => "{";

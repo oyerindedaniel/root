@@ -94,6 +94,7 @@ export const gatewayErrorCodeSchema = z.enum([
   "discovery_failed",
   "cancelled",
   "stopped_by_user",
+  "no_response",
   "execution_failed",
   "operation_in_progress",
   "workflow_not_prepared",

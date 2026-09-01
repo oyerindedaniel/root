@@ -15,6 +15,7 @@ import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
+import { PresentAsk } from "@repo/ui/present-ask";
 import { SearchHit } from "@repo/ui/search-hit";
 import { useToolPresent } from "@repo/ui/tool-present";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -114,8 +115,12 @@ export function CatalogSearch() {
             const submitted =
               queryInputRef.current?.value ?? filled?.text ?? parsed.query;
             const result = await runSearch(submitted, options.signal);
-            present.commit(result.products[0]?.id ?? null);
-            return result;
+            const selectedId = await present.waitForSelect({
+              candidateId: result.products[0]?.id ?? null,
+              signal: options.signal,
+            });
+            present.commit(selectedId ?? result.products[0]?.id ?? null);
+            return selectedId ? { ...result, selectedId } : result;
           } catch (caught) {
             present.commit(null);
             throw caught;
@@ -137,6 +142,7 @@ export function CatalogSearch() {
     present.preview,
     present.setCoedit,
     present.waitForPersist,
+    present.waitForSelect,
     runSearch,
   ]);
 
@@ -192,12 +198,16 @@ export function CatalogSearch() {
       {status === "success" && products.length === 0 ? (
         <p className="text-base text-muted-foreground">No matching products.</p>
       ) : null}
+      {present.choosing ? <PresentAsk>Pick a product.</PresentAsk> : null}
       <ul className="flex flex-col gap-3">
         {products.map((product, index) => (
           <SearchHit
             key={product.id}
             ref={index === 0 ? present.firstHitRef : undefined}
             revealed={present.hitId === product.id}
+            onSelect={
+              present.choosing ? () => present.choose(product.id) : undefined
+            }
           >
             <p className="text-base font-medium">{product.name}</p>
             <p className="mt-1 text-base text-muted-foreground">

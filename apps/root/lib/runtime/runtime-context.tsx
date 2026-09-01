@@ -34,6 +34,8 @@ export type RuntimeApi = {
   testProvider: (
     providerId: string,
   ) => Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>>;
+  waitingOnHuman: boolean;
+  waitingInstanceIds: string[];
 };
 
 const RuntimeContext = createContext<RuntimeApi | null>(null);

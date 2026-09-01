@@ -7,6 +7,7 @@ import {
   TOOL_PRESENT_FILL_MS,
   TOOL_PRESENT_PREVIEW_MS,
   waitPresent,
+  waitForChoice,
 } from "./fill-input";
 
 function record() {
@@ -119,5 +120,27 @@ describe("waitPresent", () => {
     controller.abort();
     await expect(done).rejects.toMatchObject({ name: "AbortError" });
     vi.useRealTimers();
+  });
+});
+
+describe("waitForChoice", () => {
+  it("resolves with the chosen id", async () => {
+    const done = waitForChoice({
+      bind: (choose) => {
+        choose("p1");
+        return () => undefined;
+      },
+    });
+    await expect(done).resolves.toBe("p1");
+  });
+
+  it("rejects when the signal aborts before a choice", async () => {
+    const controller = new AbortController();
+    const done = waitForChoice({
+      signal: controller.signal,
+      bind: () => () => undefined,
+    });
+    controller.abort();
+    await expect(done).rejects.toMatchObject({ name: "AbortError" });
   });
 });

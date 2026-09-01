@@ -19,6 +19,7 @@ export const searchProductsOutputSchema = z.object({
   status: z.literal("success"),
   query: z.string().min(1).max(120),
   products: z.array(shopProductSchema).max(12),
+  selectedId: z.string().min(1).max(64).optional(),
 });
 
 export type SearchProductsOutput = z.infer<typeof searchProductsOutputSchema>;

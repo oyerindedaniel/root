@@ -5,7 +5,7 @@ export function PresentHalo({
   rounded,
 }: {
   active?: boolean;
-  rounded: "lg" | "3xl";
+  rounded: "lg" | "3xl" | "dock";
 }) {
   if (!active) {
     return null;
@@ -14,7 +14,11 @@ export function PresentHalo({
     <span
       className={cn(
         "pointer-events-none absolute -inset-px overflow-hidden motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200",
-        rounded === "3xl" ? "rounded-3xl" : "rounded-lg",
+        rounded === "3xl"
+          ? "rounded-3xl"
+          : rounded === "dock"
+            ? "rounded-[22%]"
+            : "rounded-lg",
       )}
     >
       <span className="present-halo absolute inset-[-40%]" />

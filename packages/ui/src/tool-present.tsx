@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { coeditMessage } from "@repo/contracts";
+import { coeditMessage, pendingHumanMessage } from "@repo/contracts";
 
 import {
   fillPresentedInput,
   TOOL_PRESENT_PREVIEW_MS,
   waitPresent,
+  waitForChoice,
   type FillPresentResult,
 } from "./lib/fill-input";
 
@@ -37,9 +38,12 @@ export function useToolPresent(options: {
     resolve: () => void;
     dispose: () => void;
   } | null>(null);
+  const chooseRef = useRef<(id: string) => void>(undefined);
+  const pendingPostedRef = useRef(false);
   const firstHitRef = useRef<HTMLLIElement | null>(null);
   const [hitId, setHitId] = useState<string | null>(null);
   const [intent, setIntent] = useState(false);
+  const [choosing, setChoosing] = useState(false);
 
   useEffect(() => {
     gateRef.current = gate;
@@ -54,7 +58,7 @@ export function useToolPresent(options: {
   }, [rootOrigin]);
 
   useEffect(() => {
-    if (!hitId) {
+    if (!hitId || choosing) {
       return;
     }
     firstHitRef.current?.scrollIntoView({
@@ -65,7 +69,7 @@ export function useToolPresent(options: {
       setHitId(null);
     }, 1200);
     return () => window.clearTimeout(timeout);
-  }, [hitId]);
+  }, [hitId, choosing]);
 
   const arm = useCallback(() => {
     armedRef.current = gateRef.current.shouldPresent();
@@ -99,6 +103,23 @@ export function useToolPresent(options: {
       }
       window.parent.postMessage(coeditMessage(open), rootOrigin);
       coeditPostedRef.current = open;
+    },
+    [rootOrigin],
+  );
+
+  const setPending = useCallback(
+    (open: boolean) => {
+      if (window.parent === window) {
+        return;
+      }
+      if (open && !armedRef.current) {
+        return;
+      }
+      if (!open && !pendingPostedRef.current) {
+        return;
+      }
+      window.parent.postMessage(pendingHumanMessage(open), rootOrigin);
+      pendingPostedRef.current = open;
     },
     [rootOrigin],
   );
@@ -149,6 +170,51 @@ export function useToolPresent(options: {
     }
   }, []);
 
+  const choose = useCallback((id: string) => {
+    chooseRef.current?.(id);
+  }, []);
+
+  const waitForSelect = useCallback(
+    async (options: { candidateId: string | null; signal?: AbortSignal }) => {
+      if (
+        !options.candidateId ||
+        !armedRef.current ||
+        !gateRef.current.shouldPresent()
+      ) {
+        return;
+      }
+      setChoosing(true);
+      setHitId(options.candidateId);
+      setCoedit(true);
+      setPending(true);
+      try {
+        requestAnimationFrame(() => {
+          firstHitRef.current?.scrollIntoView({
+            behavior: "instant",
+            block: "nearest",
+          });
+        });
+        return await waitForChoice({
+          signal: options.signal,
+          bind: (chooseId) => {
+            chooseRef.current = (id) => {
+              setHitId(id);
+              chooseId(id);
+            };
+            return () => {
+              chooseRef.current = undefined;
+            };
+          },
+        });
+      } finally {
+        setChoosing(false);
+        setCoedit(false);
+        setPending(false);
+      }
+    },
+    [setCoedit, setPending],
+  );
+
   const fill = useCallback(
     async (options: {
       text: string;
@@ -197,6 +263,9 @@ export function useToolPresent(options: {
     setCoedit,
     persist,
     waitForPersist,
+    waitForSelect,
+    choose,
+    choosing,
     intent,
     hitId,
     firstHitRef,

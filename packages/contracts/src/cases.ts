@@ -21,6 +21,7 @@ export const searchCasesOutputSchema = z.object({
   status: z.literal("success"),
   query: z.string().min(1).max(120),
   cases: z.array(supportCaseSchema).max(12),
+  selectedId: z.string().min(1).max(64).optional(),
 });
 
 export type SearchCasesOutput = z.infer<typeof searchCasesOutputSchema>;
