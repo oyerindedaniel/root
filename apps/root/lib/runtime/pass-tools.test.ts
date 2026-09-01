@@ -188,4 +188,21 @@ describe("bindPassReadStep", () => {
     const step = binding.freeze("http://localhost:3003", null);
     expect(step.namespacedName).toBe("support.search_cases");
   });
+
+  it("freezes a Cases bind placeholder without resolving it", () => {
+    const binding = bindPassReadStep({
+      providerId: "support",
+      tool: "search_cases",
+      arguments: { query: { bind: { stepIndex: 0 } } },
+    });
+    if (!binding) {
+      throw new Error("expected binding");
+    }
+    expect(binding.proposed.arguments.query).toEqual({
+      bind: { stepIndex: 0 },
+    });
+    expect(binding.freeze("http://localhost:3003", null).arguments.query).toEqual(
+      { bind: { stepIndex: 0 } },
+    );
+  });
 });

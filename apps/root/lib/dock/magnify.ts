@@ -5,6 +5,14 @@ export const DOCK_PITCH = DOCK_ICON_SIZE + DOCK_ICON_GAP;
 export const DOCK_VIEWPORT_GUTTER = 80;
 export const DOCK_ROW_PADDING = 16;
 
+export function dockShelfMinHeight() {
+  return DOCK_ICON_SIZE + DOCK_ROW_PADDING;
+}
+
+export function dockShelfMinWidth() {
+  return DOCK_PITCH + DOCK_ROW_PADDING;
+}
+
 export function dockIconScale(
   index: number,
   pointerX: number,

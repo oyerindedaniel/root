@@ -5,10 +5,13 @@ import { useTRPCClient } from "@repo/api-client";
 import { requirePublicEnv } from "@repo/api-client/env";
 import {
   SEARCH_CASES_INPUT_SCHEMA,
+  caseSearchText,
   createDocumentVisibilityGate,
   parseToolExecuteInput,
+  portableCaseReference,
   searchCasesInputSchema,
   searchCasesOutputSchema,
+  searchCasesToolInputSchema,
   type SupportCase,
 } from "@repo/contracts";
 import { Badge } from "@repo/ui/badge";
@@ -33,6 +36,7 @@ export function CasesSearch() {
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [cases, setCases] = useState<SupportCase[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [boundAsk, setBoundAsk] = useState<string | null>(null);
   const queryInputRef = useRef<HTMLInputElement>(null);
   const visibilityGateRef = useRef(createDocumentVisibilityGate());
   const present = useToolPresent({
@@ -41,9 +45,15 @@ export function CasesSearch() {
   });
 
   const runSearch = useCallback(
-    async (nextQuery: string, signal?: AbortSignal) => {
+    async (
+      nextQuery: string,
+      signal?: AbortSignal,
+      keepField = false,
+    ) => {
       const parsed = searchCasesInputSchema.parse({ query: nextQuery });
-      setQuery(parsed.query);
+      if (!keepField) {
+        setQuery(parsed.query);
+      }
       setStatus("pending");
       setError(null);
       present.clear();
@@ -88,44 +98,98 @@ export function CasesSearch() {
           untrustedContentHint: false,
         },
         execute: async (input, options) => {
-          const parsed = searchCasesInputSchema.parse(
+          const signal = options?.signal ?? controller.signal;
+          const parsed = searchCasesToolInputSchema.parse(
             parseToolExecuteInput(input),
           );
           present.arm();
           present.setCoedit(true);
           try {
+            if (typeof parsed.query !== "string") {
+              if (visibilityGateRef.current.shouldPresent()) {
+                setBoundAsk(`Cases for ${parsed.query.displayName}`);
+              }
+              const text = caseSearchText(parsed.query);
+              const result = text
+                ? await runSearch(text, signal, true)
+                : searchCasesOutputSchema.parse({
+                    status: "success",
+                    query: parsed.query,
+                    cases: [],
+                  });
+              if (!text) {
+                setCases([]);
+                setStatus("success");
+              }
+              const selectedId = await present.waitForSelect({
+                candidateId: result.cases[0]?.id ?? null,
+                signal,
+              });
+              const hit = result.cases.find(
+                (supportCase) => supportCase.id === selectedId,
+              );
+              present.commit(selectedId ?? result.cases[0]?.id ?? null);
+              return {
+                ...result,
+                query: parsed.query,
+                ...(selectedId ? { selectedId } : {}),
+                ...(hit
+                  ? {
+                      selected: portableCaseReference(
+                        hit,
+                        new Date().toISOString(),
+                      ),
+                    }
+                  : {}),
+              };
+            }
             const filled = await present.fill({
               text: parsed.query,
               setValue: setQuery,
               input: queryInputRef.current,
-              signal: options.signal,
+              signal,
             });
             if (filled?.yielded) {
-              await present.waitForPersist({ signal: options.signal });
+              await present.waitForPersist({ signal });
             } else {
-              await present.preview({ signal: options.signal });
+              await present.preview({ signal });
               const live =
                 queryInputRef.current?.value ?? filled?.text ?? parsed.query;
               if (filled && live !== filled.text) {
-                await present.waitForPersist({ signal: options.signal });
+                await present.waitForPersist({ signal });
               }
             }
-            options.signal?.throwIfAborted();
+            signal.throwIfAborted();
             present.setCoedit(false);
             const submitted =
               queryInputRef.current?.value ?? filled?.text ?? parsed.query;
-            const result = await runSearch(submitted, options.signal);
+            const result = await runSearch(submitted, signal);
             const selectedId = await present.waitForSelect({
               candidateId: result.cases[0]?.id ?? null,
-              signal: options.signal,
+              signal,
             });
+            const hit = result.cases.find(
+              (supportCase) => supportCase.id === selectedId,
+            );
             present.commit(selectedId ?? result.cases[0]?.id ?? null);
-            return selectedId ? { ...result, selectedId } : result;
+            return {
+              ...result,
+              ...(selectedId ? { selectedId } : {}),
+              ...(hit
+                ? {
+                    selected: portableCaseReference(
+                      hit,
+                      new Date().toISOString(),
+                    ),
+                  }
+                : {}),
+            };
           } catch (caught) {
             present.commit(null);
             throw caught;
           } finally {
             present.setCoedit(false);
+            setBoundAsk(null);
           }
         },
       },
@@ -198,7 +262,9 @@ export function CasesSearch() {
       {status === "success" && cases.length === 0 ? (
         <p className="text-base text-muted-foreground">No matching cases.</p>
       ) : null}
-      {present.choosing ? <PresentAsk>Pick a case.</PresentAsk> : null}
+      {present.choosing || boundAsk ? (
+        <PresentAsk>{boundAsk ?? "Pick a case."}</PresentAsk>
+      ) : null}
       <ul className="flex flex-col gap-3">
         {cases.map((supportCase, index) => (
           <SearchHit

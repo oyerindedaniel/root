@@ -134,7 +134,7 @@ export async function registerGatewayTools(
       name: "discover_capabilities",
       title: "Discover capabilities",
       description:
-        "Mount a configured provider and discover its current WebMCP tools.",
+        "Inspect a configured provider's current WebMCP tools. Do not call this before prepare_workflow or execute_workflow; execution mounts and rediscovers each provider itself. Tool handles belong to the current document: after navigation, refresh, or a stale-handle error, list the page's WebMCP tools again and use the newly returned handle instead of retrying a cached one.",
       inputSchema: {
         type: "object",
         properties: {
@@ -156,7 +156,7 @@ export async function registerGatewayTools(
         }
         return handlersRef.current.discoverCapabilities(
           parsed,
-          options.signal,
+          options?.signal ?? signal,
         );
       },
     },
@@ -210,7 +210,10 @@ export async function registerGatewayTools(
             "invoke_granted_tool arguments exceed the input limit.",
           );
         }
-        return handlersRef.current.invokeGrantedTool(parsed, options.signal);
+        return handlersRef.current.invokeGrantedTool(
+          parsed,
+          options?.signal ?? signal,
+        );
       },
     },
     { signal },
@@ -264,7 +267,10 @@ export async function registerGatewayTools(
             "execute_workflow requires workflowId.",
           );
         }
-        return handlersRef.current.executeWorkflow(parsed, options.signal);
+        return handlersRef.current.executeWorkflow(
+          parsed,
+          options?.signal ?? signal,
+        );
       },
     },
     { signal },

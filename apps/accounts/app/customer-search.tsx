@@ -7,6 +7,7 @@ import {
   SEARCH_CUSTOMERS_INPUT_SCHEMA,
   createDocumentVisibilityGate,
   parseToolExecuteInput,
+  portableCustomerReference,
   searchCustomersInputSchema,
   searchCustomersOutputSchema,
   type Customer,
@@ -90,6 +91,7 @@ export function CustomerSearch() {
           untrustedContentHint: false,
         },
         execute: async (input, options) => {
+          const signal = options?.signal ?? controller.signal;
           const parsed = searchCustomersInputSchema.parse(
             parseToolExecuteInput(input),
           );
@@ -100,29 +102,43 @@ export function CustomerSearch() {
               text: parsed.query,
               setValue: setQuery,
               input: queryInputRef.current,
-              signal: options.signal,
+              signal,
             });
             if (filled?.yielded) {
-              await present.waitForPersist({ signal: options.signal });
+              await present.waitForPersist({ signal });
             } else {
-              await present.preview({ signal: options.signal });
+              await present.preview({ signal });
               const live =
                 queryInputRef.current?.value ?? filled?.text ?? parsed.query;
               if (filled && live !== filled.text) {
-                await present.waitForPersist({ signal: options.signal });
+                await present.waitForPersist({ signal });
               }
             }
-            options.signal?.throwIfAborted();
+            signal.throwIfAborted();
             present.setCoedit(false);
             const submitted =
               queryInputRef.current?.value ?? filled?.text ?? parsed.query;
-            const result = await runSearch(submitted, options.signal);
+            const result = await runSearch(submitted, signal);
             const selectedId = await present.waitForSelect({
               candidateId: result.customers[0]?.id ?? null,
-              signal: options.signal,
+              signal,
             });
+            const hit = result.customers.find(
+              (customer) => customer.id === selectedId,
+            );
             present.commit(selectedId ?? result.customers[0]?.id ?? null);
-            return selectedId ? { ...result, selectedId } : result;
+            return {
+              ...result,
+              ...(selectedId ? { selectedId } : {}),
+              ...(hit
+                ? {
+                    selected: portableCustomerReference(
+                      hit,
+                      new Date().toISOString(),
+                    ),
+                  }
+                : {}),
+            };
           } catch (caught) {
             present.commit(null);
             throw caught;

@@ -136,6 +136,13 @@ describe("proposed workflow steps", () => {
         arguments: { query: "hub" },
       }).success,
     ).toBe(true);
+    expect(
+      proposedWorkflowStepSchema.safeParse({
+        providerId: "support",
+        tool: "search_cases",
+        arguments: { query: { bind: { stepIndex: 0 } } },
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects a mismatched provider and tool", () => {

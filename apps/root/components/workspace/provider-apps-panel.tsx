@@ -3,6 +3,7 @@
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  InformationCircleIcon,
   PhotoIcon,
   PencilSquareIcon,
   PlusIcon,
@@ -21,8 +22,8 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type FormEvent,
   type ReactNode,
+  type SubmitEvent,
 } from "react";
 import type { NormalizedToolDescriptor } from "@repo/contracts";
 
@@ -31,7 +32,13 @@ import { Badge } from "@repo/ui/badge";
 import { Checkbox } from "@repo/ui/checkbox";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@repo/ui/tooltip";
 
+import { instanceIdsForProvider } from "@/lib/desktop/library-edit";
 import { providerKey } from "@/lib/providers/catalog";
 import {
   deriveProviderGrantRows,
@@ -50,7 +57,7 @@ import type {
 
 export function ProviderAppsPanel() {
   const library = useProviderLibrary();
-  const { testProvider } = useRuntime();
+  const { testProvider, closeProvider, state } = useRuntime();
   const [editing, setEditing] = useState<CustomProvider | "new" | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -274,6 +281,12 @@ export function ProviderAppsPanel() {
                       }
                       onClick={() => {
                         if (confirmDelete === id) {
+                          for (const instanceId of instanceIdsForProvider(
+                            Object.values(state.windows),
+                            id,
+                          )) {
+                            closeProvider(instanceId);
+                          }
                           library.deleteProvider(id);
                           setConfirmDelete(null);
                         } else {
@@ -424,6 +437,7 @@ function ProviderForm({
   const [iconPreview, setIconPreview] = useState(provider?.icon ?? null);
   const [iconName, setIconName] = useState<string | null>(null);
   const iconInputId = useId();
+  const originInputId = useId();
   const objectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -434,7 +448,7 @@ function ProviderForm({
     };
   }, []);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setPending(true);
@@ -495,9 +509,34 @@ function ProviderForm({
           className="border-white/15 bg-white/10 text-white"
         />
       </Label>
-      <Label className="text-sm text-white/70">
-        Origin
+      <div className="space-y-2">
+        <div className="flex items-center gap-1">
+          <Label
+            htmlFor={originInputId}
+            className="text-sm text-white/70"
+          >
+            Origin
+          </Label>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                data-caliper-id="root-provider-origin-info"
+                className="rounded-full p-0.5 text-white/50 hover:bg-white/10 hover:text-white/80"
+                aria-label="When this site works"
+              >
+                <InformationCircleIcon className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className="z-[2147483647] max-w-xs py-1.5 leading-snug">
+              A site you add only works if this browser can see that window’s
+              tools. Chrome with WebMCP on can. As of today, Codex’s in-app
+              browser cannot.
+            </TooltipContent>
+          </Tooltip>
+        </div>
         <Input
+          id={originInputId}
           name="origin"
           type="url"
           required
@@ -505,7 +544,7 @@ function ProviderForm({
           placeholder="https://app.example"
           className="border-white/15 bg-white/10 text-white"
         />
-      </Label>
+      </div>
       <Label className="text-sm text-white/70">
         Entry URL
         <Input

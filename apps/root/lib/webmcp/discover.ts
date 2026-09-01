@@ -7,11 +7,8 @@ import {
 } from "@repo/contracts";
 
 export class DiscoveryTimeoutError extends GatewayError {
-  constructor() {
-    super(
-      "discovery_timeout",
-      "Provider tools were not discovered in time.",
-    );
+  constructor(message = "Provider tools were not discovered in time.") {
+    super("discovery_timeout", message);
     this.name = "DiscoveryTimeoutError";
   }
 }
@@ -50,10 +47,13 @@ export async function discoverTools(options: {
     });
   };
 
-  const onToolChange = () => undefined;
-  options.modelContext.addEventListener("toolchange", onToolChange);
-
-  try {
+  const addEventListener = options.modelContext.addEventListener?.bind(
+    options.modelContext,
+  );
+  const removeEventListener = options.modelContext.removeEventListener?.bind(
+    options.modelContext,
+  );
+  if (!addEventListener || !removeEventListener) {
     while (now() <= deadline) {
       options.signal.throwIfAborted();
       const found = await match();
@@ -65,8 +65,59 @@ export async function discoverTools(options: {
       }
       await sleep(pollMs, options.signal);
     }
+    throw new DiscoveryTimeoutError();
+  }
+
+  let revision = 0;
+  let wake: (() => void) | null = null;
+  const onToolChange = () => {
+    revision += 1;
+    wake?.();
+  };
+  addEventListener("toolchange", onToolChange);
+  try {
+    while (now() <= deadline) {
+      options.signal.throwIfAborted();
+      const matchedRevision = revision;
+      const found = await match();
+      if (found.length >= (expected?.size ?? 1)) {
+        return found;
+      }
+      const remaining = deadline - now();
+      if (remaining <= 0) {
+        break;
+      }
+      if (revision !== matchedRevision) {
+        continue;
+      }
+      await new Promise<void>((resolve, reject) => {
+        const finish = (error?: unknown) => {
+          clearTimeout(timer);
+          options.signal.removeEventListener("abort", onAbort);
+          wake = null;
+          if (error === undefined) {
+            resolve();
+          } else {
+            reject(error);
+          }
+        };
+        const onAbort = () => {
+          finish(
+            options.signal.reason ??
+              new DOMException("Aborted", "AbortError"),
+          );
+        };
+        const timer = setTimeout(finish, remaining);
+        wake = () => finish();
+        if (options.signal.aborted) {
+          onAbort();
+        } else {
+          options.signal.addEventListener("abort", onAbort, { once: true });
+        }
+      });
+    }
   } finally {
-    options.modelContext.removeEventListener("toolchange", onToolChange);
+    removeEventListener("toolchange", onToolChange);
   }
 
   throw new DiscoveryTimeoutError();

@@ -145,7 +145,7 @@ function WorkspaceDock() {
                 ? { duration: 0 }
                 : { duration: 0.16, ease: [0.16, 1, 0.3, 1] }
             }
-            className="pointer-events-none absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-full bg-black/80 px-3 py-1.5 text-sm text-white shadow-lg ring-1 ring-white/15"
+            className="pointer-events-none absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-full bg-black/80 px-2 py-1 text-xs text-white shadow-lg ring-1 ring-white/15"
           >
             Remove from Dock
           </motion.div>

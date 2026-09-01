@@ -8,6 +8,7 @@ const rootOrigin = requirePublicEnv(
 );
 
 const nextConfig: NextConfig = {
+  reactStrictMode: false,
   transpilePackages: ["@repo/ui", "@repo/api-client"],
   async rewrites() {
     return [

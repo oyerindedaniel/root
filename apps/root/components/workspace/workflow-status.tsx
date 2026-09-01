@@ -11,6 +11,7 @@ import {
 } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { workflowQueryLabel } from "@repo/contracts";
 import { cn } from "@repo/ui/lib/cn";
 
 import { WorkflowPanel } from "@/components/workspace/workflow-panel";
@@ -460,8 +461,8 @@ function pillLabel(
     return provider ? `Discovering ${provider.label}` : "Discovering";
   }
   if (state.workflow.lifecycle === "executing") {
-    const query = state.workflow.step?.arguments.query;
-    return query ? `Searching "${query}"` : "Running";
+    const label = workflowQueryLabel(state.workflow.step?.arguments.query);
+    return label ? `Searching "${label}"` : "Running";
   }
   return "Running";
 }
@@ -473,7 +474,7 @@ function inspectRows(
 ) {
   const providerWindow = focusedProviderWindow(state);
   const provider = currentProvider(catalog, providerWindow?.providerId ?? null);
-  const query = state.workflow.step?.arguments.query ?? null;
+  const query = workflowQueryLabel(state.workflow.step?.arguments.query);
   const waiting = waitingProviderIds(state, pendingInstanceIds).flatMap(
     (providerId) => {
       const waitingProvider = currentProvider(catalog, providerId);

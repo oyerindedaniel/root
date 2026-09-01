@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { portableReferenceSchema } from "./portable-reference.js";
+
 export const searchProductsInputSchema = z.strictObject({
   query: z.string().min(1).max(120),
 });
@@ -20,6 +22,7 @@ export const searchProductsOutputSchema = z.object({
   query: z.string().min(1).max(120),
   products: z.array(shopProductSchema).max(12),
   selectedId: z.string().min(1).max(64).optional(),
+  selected: portableReferenceSchema.optional(),
 });
 
 export type SearchProductsOutput = z.infer<typeof searchProductsOutputSchema>;

@@ -7,6 +7,7 @@ export * from "./document-pending.js";
 export * from "./document-visibility.js";
 export * from "./health.js";
 export * from "./model-context.js";
+export * from "./portable-reference.js";
 export * from "./shop.js";
 export * from "./stable-json.js";
 export * from "./webmcp.js";

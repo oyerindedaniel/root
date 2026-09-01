@@ -411,6 +411,72 @@ describe("prepareWorkflow", () => {
     }
   });
 
+  it("freezes a Cases query bound to an earlier step", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "search_customers",
+          arguments: { query: "ada" },
+        },
+        {
+          providerId: "support",
+          tool: "search_cases",
+          arguments: { query: { bind: { stepIndex: 0 } } },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.steps[1]?.arguments.query).toEqual({
+        bind: { stepIndex: 0 },
+      });
+    }
+  });
+
+  it("rejects a bind that is not an earlier Cases argument", () => {
+    const sameStep = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "support",
+          tool: "search_cases",
+          arguments: { query: { bind: { stepIndex: 0 } } },
+        },
+      ],
+    });
+    expect(sameStep.ok).toBe(false);
+    if (!sameStep.ok) {
+      expect(sameStep.error.code).toBe("unsupported_graph");
+    }
+    const intoShop = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "search_customers",
+          arguments: { query: "ada" },
+        },
+        {
+          providerId: "shop",
+          tool: "search_products",
+          arguments: { query: { bind: { stepIndex: 0 } } },
+        },
+      ],
+    });
+    expect(intoShop.ok).toBe(false);
+    if (!intoShop.ok) {
+      expect(intoShop.error.code).toBe("unsupported_graph");
+    }
+  });
+
   it("rejects a live document that is missing the prepared tool", () => {
     const instanceId = "shop_1";
     let state = createInitialRuntimeState(account);

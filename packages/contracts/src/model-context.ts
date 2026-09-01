@@ -11,7 +11,7 @@ export type ModelContextTool = {
   annotations?: ModelContextAnnotations;
   execute: (
     input: unknown,
-    options: { signal: AbortSignal },
+    options?: { signal?: AbortSignal },
   ) => Promise<unknown>;
 };
 
@@ -25,7 +25,9 @@ export type RegisteredTool = {
   annotations?: ModelContextAnnotations;
 };
 
-export type ModelContext = EventTarget & {
+export type ModelContext = {
+  addEventListener?: EventTarget["addEventListener"];
+  removeEventListener?: EventTarget["removeEventListener"];
   registerTool: (
     tool: ModelContextTool,
     options?: { exposedTo?: string[]; signal?: AbortSignal },

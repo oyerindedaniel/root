@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { searchCasesInputSchema, searchCasesOutputSchema } from "./cases.js";
+import { searchCasesProposedArgumentsSchema, searchCasesOutputSchema } from "./cases.js";
 import { searchCustomersInputSchema, searchCustomersOutputSchema } from "./customers.js";
 import { searchProductsInputSchema, searchProductsOutputSchema } from "./shop.js";
 import {
@@ -86,7 +86,7 @@ export const proposedProductSearchStepSchema = z.strictObject({
 export const proposedCaseSearchStepSchema = z.strictObject({
   providerId: z.literal("support"),
   tool: z.literal("search_cases"),
-  arguments: searchCasesInputSchema,
+  arguments: searchCasesProposedArgumentsSchema,
 });
 
 export const proposedWorkflowStepSchema = z.discriminatedUnion("tool", [
@@ -132,7 +132,7 @@ export const preparedCaseSearchStepSchema = z.object({
   toolName: z.literal("search_cases"),
   namespacedName: z.literal("support.search_cases"),
   schemaFingerprint: z.string().min(1).nullable(),
-  arguments: searchCasesInputSchema,
+  arguments: searchCasesProposedArgumentsSchema,
   readOnly: z.literal(true),
 });
 

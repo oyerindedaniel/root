@@ -292,8 +292,8 @@ export function RuntimeProvider({
           instanceId: openedInstanceId,
         });
 
-        const modelContext = document.modelContext;
-        if (!modelContext) {
+        const nativeModelContext = document.modelContext;
+        if (!nativeModelContext) {
           dispatch({ type: "webmcp/unavailable" });
           dispatch({
             type: "provider/failed",
@@ -308,7 +308,7 @@ export function RuntimeProvider({
         dispatch({ type: "webmcp/available" });
 
         const rawTools = await discoverTools({
-          modelContext,
+          modelContext: nativeModelContext,
           origin: entry.origin,
           discovery:
             entry.source === "builtin"
@@ -479,12 +479,12 @@ export function RuntimeProvider({
           "Another provider operation is already in progress.",
         );
       }
-      const operationSignal = adoptInstanceAbort(
-        instanceAbortsRef.current,
-        instanceId,
-        signal,
-      );
       try {
+        const operationSignal = adoptInstanceAbort(
+          instanceAbortsRef.current,
+          instanceId,
+          signal,
+        );
         return await runDiscovery(input.providerId, operationSignal);
       } finally {
         dropInstanceAbort(instanceAbortsRef.current, instanceId);
@@ -871,6 +871,7 @@ export function RuntimeProvider({
       stageSlotRef,
       openProvider,
       activateProvider,
+      closeProvider,
       registerTrayTarget,
       testProvider,
       waitingOnHuman,
@@ -881,6 +882,7 @@ export function RuntimeProvider({
       directory,
       openProvider,
       activateProvider,
+      closeProvider,
       registerTrayTarget,
       testProvider,
       state,
@@ -1002,6 +1004,9 @@ function ProviderWindowHost({
   const previousPlacementRef = useRef(windowState.placement);
   const layoutRafRef = useRef(0);
   const provider = getProvider(catalog, windowState.providerId);
+  const bindIframe = useCallback((iframe: HTMLIFrameElement | null) => {
+    iframeRef.current = iframe;
+  }, []);
   const placementMotion =
     motion.status === "suction" &&
     motion.instanceId === windowState.instanceId
@@ -1228,7 +1233,11 @@ function ProviderWindowHost({
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [onHumanPending, windowState.instanceId, windowState.origin]);
+  }, [
+    onHumanPending,
+    windowState.instanceId,
+    windowState.origin,
+  ]);
 
   return (
     <AppWindow.Root
@@ -1261,7 +1270,7 @@ function ProviderWindowHost({
       onTakeControl={() => onTakeControl(windowState.instanceId)}
     >
       <iframe
-        ref={iframeRef}
+        ref={bindIframe}
         src={windowState.entryUrl}
         allow="tools"
         title={provider.label}

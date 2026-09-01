@@ -3,8 +3,8 @@ import {
   proposedCaseSearchStepSchema,
   proposedCustomerSearchStepSchema,
   proposedProductSearchStepSchema,
-  searchCasesInputSchema,
   searchCasesOutputSchema,
+  searchCasesProposedArgumentsSchema,
   searchCustomersInputSchema,
   searchCustomersOutputSchema,
   searchProductsInputSchema,
@@ -97,10 +97,14 @@ export const PASS_READ_TOOLS = {
   [namespacedToolName("support", "search_cases")]: definePassTool({
     providerId: "support",
     tool: "search_cases",
-    inputSchema: searchCasesInputSchema,
+    inputSchema: searchCasesProposedArgumentsSchema,
     outputSchema: searchCasesOutputSchema,
     proposedSchema: proposedCaseSearchStepSchema,
-    evidence: (data) => `${data.cases.length} cases for "${data.query}"`,
+    evidence: (data) => {
+      const label =
+        typeof data.query === "string" ? `"${data.query}"` : data.query.displayName;
+      return `${data.cases.length} cases for ${label}`;
+    },
   }),
 } satisfies Record<PassReadToolName, unknown>;
 

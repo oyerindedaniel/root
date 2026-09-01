@@ -6,6 +6,8 @@ import {
   DOCK_ROW_PADDING,
   dockIconOffset,
   dockIconScale,
+  dockShelfMinHeight,
+  dockShelfMinWidth,
 } from "./magnify";
 
 describe("Dock magnification geometry", () => {
@@ -54,4 +56,12 @@ describe("Dock magnification geometry", () => {
       }
     },
   );
+});
+
+describe("empty Dock shelf", () => {
+  it("keeps rest tile height, not padding collapse", () => {
+    expect(dockShelfMinHeight()).toBeGreaterThan(DOCK_ROW_PADDING);
+    expect(dockShelfMinHeight() - DOCK_ICON_SIZE).toBe(DOCK_ROW_PADDING);
+    expect(dockShelfMinWidth() - DOCK_PITCH).toBe(DOCK_ROW_PADDING);
+  });
 });

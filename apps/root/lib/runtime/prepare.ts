@@ -1,5 +1,6 @@
 import {
   boundedError,
+  isBindQuery,
   MAX_PREPARED_WORKFLOW_STEPS,
   type BuiltinProviderId,
   type BoundedError,
@@ -33,9 +34,10 @@ export function prepareWorkflow(options: {
   }
 
   const prepared: PreparedWorkflowStep[] = [];
-  for (const raw of options.steps) {
+  for (let index = 0; index < options.steps.length; index += 1) {
     const bound = bindProposedStep({
-      raw,
+      raw: options.steps[index],
+      index,
       state: options.state,
       origins: options.origins,
     });
@@ -112,6 +114,7 @@ export function revalidatePreparedStep(options: {
 
 function bindProposedStep(options: {
   raw: unknown;
+  index: number;
   state: RuntimeState;
   origins: Record<BuiltinProviderId, string>;
 }):
@@ -128,6 +131,20 @@ function bindProposedStep(options: {
     };
   }
   const proposed = binding.proposed;
+  if (isBindQuery(proposed.arguments.query)) {
+    if (
+      proposed.tool !== "search_cases" ||
+      proposed.arguments.query.bind.stepIndex >= options.index
+    ) {
+      return {
+        ok: false,
+        error: boundedError(
+          "unsupported_graph",
+          "Each step needs an allowlisted provider, tool, and arguments.",
+        ),
+      };
+    }
+  }
 
   const origin = options.origins[proposed.providerId];
   if (!origin) {

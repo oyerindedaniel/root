@@ -7,6 +7,7 @@ import {
   SEARCH_PRODUCTS_INPUT_SCHEMA,
   createDocumentVisibilityGate,
   parseToolExecuteInput,
+  portableProductReference,
   searchProductsInputSchema,
   searchProductsOutputSchema,
   type ShopProduct,
@@ -88,6 +89,7 @@ export function CatalogSearch() {
           untrustedContentHint: false,
         },
         execute: async (input, options) => {
+          const signal = options?.signal ?? controller.signal;
           const parsed = searchProductsInputSchema.parse(
             parseToolExecuteInput(input),
           );
@@ -98,29 +100,43 @@ export function CatalogSearch() {
               text: parsed.query,
               setValue: setQuery,
               input: queryInputRef.current,
-              signal: options.signal,
+              signal,
             });
             if (filled?.yielded) {
-              await present.waitForPersist({ signal: options.signal });
+              await present.waitForPersist({ signal });
             } else {
-              await present.preview({ signal: options.signal });
+              await present.preview({ signal });
               const live =
                 queryInputRef.current?.value ?? filled?.text ?? parsed.query;
               if (filled && live !== filled.text) {
-                await present.waitForPersist({ signal: options.signal });
+                await present.waitForPersist({ signal });
               }
             }
-            options.signal?.throwIfAborted();
+            signal.throwIfAborted();
             present.setCoedit(false);
             const submitted =
               queryInputRef.current?.value ?? filled?.text ?? parsed.query;
-            const result = await runSearch(submitted, options.signal);
+            const result = await runSearch(submitted, signal);
             const selectedId = await present.waitForSelect({
               candidateId: result.products[0]?.id ?? null,
-              signal: options.signal,
+              signal,
             });
+            const hit = result.products.find(
+              (product) => product.id === selectedId,
+            );
             present.commit(selectedId ?? result.products[0]?.id ?? null);
-            return selectedId ? { ...result, selectedId } : result;
+            return {
+              ...result,
+              ...(selectedId ? { selectedId } : {}),
+              ...(hit
+                ? {
+                    selected: portableProductReference(
+                      hit,
+                      new Date().toISOString(),
+                    ),
+                  }
+                : {}),
+            };
           } catch (caught) {
             present.commit(null);
             throw caught;

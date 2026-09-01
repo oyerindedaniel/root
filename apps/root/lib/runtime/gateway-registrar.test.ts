@@ -152,6 +152,27 @@ describe("registerGatewayTools", () => {
     );
   });
 
+  it("falls back to the registrar signal when execution options are absent", async () => {
+    const tools = setup();
+    const gatewayHandlers = handlers();
+    gatewayHandlers.discoverCapabilities = vi.fn(
+      gatewayHandlers.discoverCapabilities,
+    );
+    const registrar = new AbortController();
+    await registerGatewayTools(registrar.signal, {
+      current: gatewayHandlers,
+    });
+
+    await tools
+      .find((tool) => tool.name === "discover_capabilities")
+      ?.execute({ providerId: "custom-analytics-1" });
+
+    expect(gatewayHandlers.discoverCapabilities).toHaveBeenCalledWith(
+      { providerId: "custom-analytics-1" },
+      registrar.signal,
+    );
+  });
+
   it("routes invoke, prepare, execute, cancel, inspect, and window chrome inputs", async () => {
     const tools = setup();
     const gatewayHandlers = handlers();

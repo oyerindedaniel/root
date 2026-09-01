@@ -18,6 +18,8 @@ import {
   dockIconScale,
   dockPitch,
   dockPointerAllowed,
+  dockShelfMinHeight,
+  dockShelfMinWidth,
 } from "@/lib/dock/magnify";
 
 type DockMagnify = {
@@ -242,6 +244,8 @@ export function DockRoot({
             {
               "--dock-pitch": dockPitch(itemCount),
               "--dock-icon-size": "calc(var(--dock-pitch) * 0.875)",
+              minHeight: dockShelfMinHeight(),
+              minWidth: dockShelfMinWidth(),
             } as CSSProperties
           }
         >

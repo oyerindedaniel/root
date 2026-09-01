@@ -26,6 +26,7 @@ export type RuntimeApi = {
   stageSlotRef: RefObject<HTMLDivElement | null>;
   openProvider: (providerId: string) => void;
   activateProvider: (providerId: string) => void;
+  closeProvider: (instanceId: string) => void;
   registerTrayTarget: (
     providerId: string,
     target: HTMLSpanElement | null,

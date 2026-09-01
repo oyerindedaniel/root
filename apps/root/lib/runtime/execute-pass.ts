@@ -2,6 +2,7 @@ import {
   boundedError,
   boundedSuccess,
   GatewayError,
+  isBindQuery,
   parseBoundedJsonResult,
   parseExecuteResultText,
   type BoundedResultEnvelope,
@@ -10,6 +11,7 @@ import {
   type ExecuteWorkflowOutput,
   type InvokeKind,
   type ModelContext,
+  type PreparedWorkflowStep,
   type RegisteredTool,
   type WorkflowStepResult,
 } from "@repo/contracts";
@@ -183,7 +185,7 @@ export async function executePass(options: {
           modelContext,
           tool: handle,
           invokeKind: descriptor.invokeKind,
-          input: step.arguments,
+          input: resolveStepArguments(step, results),
           signal,
         });
         const parsed = parsePassToolResult(
@@ -236,4 +238,22 @@ export async function executePass(options: {
     });
     return boundedError("execution_failed", "Workflow execution failed.");
   }
+}
+
+function resolveStepArguments(
+  step: PreparedWorkflowStep,
+  results: WorkflowStepResult[],
+) {
+  const query = step.arguments.query;
+  if (!isBindQuery(query)) {
+    return step.arguments;
+  }
+  const selected = results[query.bind.stepIndex]?.data.selected;
+  if (!selected) {
+    throw new GatewayError(
+      "execution_failed",
+      "Workflow execution failed.",
+    );
+  }
+  return { query: selected };
 }

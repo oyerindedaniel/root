@@ -44,7 +44,6 @@ export function SignInForm() {
           autoComplete="username"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="user@example.com"
           required
         />
       </Label>
@@ -54,7 +53,6 @@ export function SignInForm() {
           autoComplete="current-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          placeholder="user12345"
           required
           minLength={8}
         />

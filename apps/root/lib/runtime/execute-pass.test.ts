@@ -25,6 +25,7 @@ const account = {
 const origins = {
   accounts: "http://localhost:3001",
   shop: "http://localhost:3002",
+  support: "http://localhost:3003",
 };
 
 const productStep: PreparedWorkflowStep = {
@@ -60,6 +61,15 @@ const productOutput = {
   ],
 };
 
+const adaReference = {
+  sourceProvider: "accounts" as const,
+  entityType: "customer" as const,
+  sourceId: "customer_1",
+  displayName: "Ada",
+  summary: { email: "ada@localhost" },
+  capturedAt: "2026-09-01T18:04:00.000Z",
+};
+
 const customerOutput = {
   status: "success",
   query: "ada",
@@ -68,6 +78,33 @@ const customerOutput = {
       id: "customer_1",
       name: "Ada",
       email: "ada@localhost",
+    },
+  ],
+  selectedId: "customer_1",
+  selected: adaReference,
+};
+
+const caseStep: PreparedWorkflowStep = {
+  providerId: "support",
+  origin: origins.support,
+  toolName: "search_cases",
+  namespacedName: "support.search_cases",
+  schemaFingerprint: null,
+  arguments: { query: { bind: { stepIndex: 0 } } },
+  readOnly: true,
+};
+
+const caseOutput = {
+  status: "success",
+  query: adaReference,
+  cases: [
+    {
+      id: "case-ada-hub",
+      title: "USB-C hub not detected",
+      customerName: "Ada",
+      customerEmail: "ada@localhost",
+      orderRef: "usb-hub",
+      status: "open",
     },
   ],
 };
@@ -158,7 +195,11 @@ function createHarness(steps: PreparedWorkflowStep[]) {
     async (options: Parameters<NonNullable<ExecutePassDependencies["executeTool"]>>[0]) => {
       events.push(`execute:${options.tool.name}`);
       return JSON.stringify(
-        options.tool.name === "search_products" ? productOutput : customerOutput,
+        options.tool.name === "search_products"
+          ? productOutput
+          : options.tool.name === "search_cases"
+            ? caseOutput
+            : customerOutput,
       );
     },
   );
@@ -427,5 +468,40 @@ describe("executePass", () => {
     );
     expect(harness.discover).toHaveBeenCalledTimes(1);
     expect(harness.dependencies.executeTool).toHaveBeenCalledTimes(1);
+  });
+
+  it("delivers the earlier selected snapshot intact to a bound Cases step", async () => {
+    const harness = createHarness([customerStep, caseStep]);
+    const result = await run(harness);
+
+    expect(result.status).toBe("success");
+    expect(harness.executeTool.mock.calls[1]?.[0]?.input).toEqual({
+      query: adaReference,
+    });
+    expect(harness.executeTool.mock.calls[1]?.[0]?.input).not.toEqual({
+      query: "ada@localhost",
+    });
+  });
+
+  it("fails when a bound Cases step has no selected snapshot", async () => {
+    const harness = createHarness([customerStep, caseStep]);
+    harness.executeTool.mockImplementation(async (options) => {
+      return JSON.stringify(
+        options.tool.name === "search_customers"
+          ? {
+              status: "success",
+              query: "ada",
+              customers: customerOutput.customers,
+            }
+          : caseOutput,
+      );
+    });
+
+    const result = await run(harness);
+
+    expect(result.status === "error" ? result.code : null).toBe(
+      "execution_failed",
+    );
+    expect(harness.executeTool).toHaveBeenCalledTimes(1);
   });
 });
