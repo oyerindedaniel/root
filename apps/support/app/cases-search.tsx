@@ -137,7 +137,7 @@ export function CasesSearch() {
         <p className="text-base text-muted-foreground">No matching cases.</p>
       ) : null}
       {present.choosing || boundAsk ? (
-        <PresentAsk>{boundAsk ?? "Pick a case."}</PresentAsk>
+        <PresentAsk>{boundAsk ?? "Pick a case"}</PresentAsk>
       ) : null}
       <ul className="flex flex-col gap-3">
         {cases.map((supportCase, index) => (

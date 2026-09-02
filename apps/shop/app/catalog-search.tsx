@@ -128,7 +128,7 @@ export function CatalogSearch() {
       {status === "success" && products.length === 0 ? (
         <p className="text-base text-muted-foreground">No matching products.</p>
       ) : null}
-      {present.choosing ? <PresentAsk>Pick a product.</PresentAsk> : null}
+      {present.choosing ? <PresentAsk>Pick a product</PresentAsk> : null}
       <ul className="flex flex-col gap-3">
         {products.map((product, index) => (
           <SearchHit

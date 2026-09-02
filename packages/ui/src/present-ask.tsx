@@ -2,6 +2,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { ReactNode } from "react";
 
 import { cn } from "./lib/cn";
+import { OscillatingDots } from "./oscillating-dots";
 import { PresentHalo } from "./present-halo";
 
 export const presentAskVariants = cva(
@@ -29,7 +30,10 @@ export function PresentAsk({
   return (
     <div className="relative w-fit self-start">
       <PresentHalo active rounded="3xl" />
-      <p className={cn(presentAskVariants({ size }))}>{children}</p>
+      <p className={cn(presentAskVariants({ size }), "gap-0.5")}>
+        {children}
+        <OscillatingDots />
+      </p>
     </div>
   );
 }

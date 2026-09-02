@@ -13,6 +13,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { workflowQueryLabel, type PreparedWorkflowStep } from "@repo/contracts";
 import { cn } from "@repo/ui/lib/cn";
+import { OscillatingDots } from "@repo/ui/oscillating-dots";
 
 import { WorkflowPanel } from "@/components/workspace/workflow-panel";
 import {
@@ -86,11 +87,8 @@ export function WorkflowStatus() {
   const dragging = useRef(false);
   const hadLabel = useRef(false);
   const providerWindow = focusedProviderWindow(state);
-  const { running, failed } = indicatorActivity(
-    state,
-    issueHidden,
-    waitingOnHuman,
-  );
+  const { running, failed } = indicatorActivity(state, issueHidden);
+  const pulsing = running || waitingOnHuman;
   const nextLabel = pillLabel(state, catalog, running, failed, waitingOnHuman);
   const [content, setContent] = useState<{
     label: string;
@@ -99,7 +97,7 @@ export function WorkflowStatus() {
     nextLabel
       ? {
           label: nextLabel,
-          running,
+          running: pulsing,
         }
       : null,
   );
@@ -117,7 +115,7 @@ export function WorkflowStatus() {
     if (nextLabel) {
       setContent({
         label: nextLabel,
-        running,
+        running: pulsing,
       });
       return;
     }
@@ -125,7 +123,7 @@ export function WorkflowStatus() {
       setContent(null);
     }, LABEL_COLLAPSE_GRACE);
     return () => window.clearTimeout(timeout);
-  }, [nextLabel, running]);
+  }, [nextLabel, pulsing]);
 
   useEffect(() => {
     function placeAtCorner() {
@@ -341,9 +339,7 @@ export function WorkflowStatus() {
               )}
             >
               <span className="min-w-0 truncate">{content.label}</span>
-              {content.running ? (
-                <OscillatingDots reduceMotion={reduceMotion === true} />
-              ) : null}
+              {content.running ? <OscillatingDots /> : null}
             </motion.span>
           ) : null}
         </AnimatePresence>
@@ -402,49 +398,19 @@ export function WorkflowStatus() {
   );
 }
 
-function indicatorActivity(
-  state: RuntimeState,
-  issueHidden: boolean,
-  waitingOnHuman: boolean,
-) {
+function indicatorActivity(state: RuntimeState, issueHidden: boolean) {
   const provider = focusedProviderWindow(state);
   const workflow = state.workflow.lifecycle;
   return {
     running:
-      !waitingOnHuman &&
-      (workflow === "executing" ||
-        provider?.lifecycle === "mounting" ||
-        provider?.lifecycle === "discovering" ||
-        provider?.lifecycle === "executing"),
+      workflow === "executing" ||
+      provider?.lifecycle === "mounting" ||
+      provider?.lifecycle === "discovering" ||
+      provider?.lifecycle === "executing",
     failed:
       !issueHidden &&
       (workflow === "failed" || provider?.lifecycle === "failed"),
   };
-}
-
-function OscillatingDots({ reduceMotion }: { reduceMotion: boolean }) {
-  if (reduceMotion) {
-    return <span aria-hidden="true">...</span>;
-  }
-  return (
-    <span className="inline-flex w-[1.05em] justify-between" aria-hidden="true">
-      {[0, 1, 2].map((index) => (
-        <motion.span
-          key={index}
-          className="inline-block"
-          animate={{ opacity: [0.2, 1, 0.2] }}
-          transition={{
-            duration: 0.9,
-            repeat: Infinity,
-            delay: index * 0.18,
-            ease: "easeInOut",
-          }}
-        >
-          .
-        </motion.span>
-      ))}
-    </span>
-  );
 }
 
 function pillLabel(

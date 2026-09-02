@@ -83,7 +83,6 @@ import {
 import { acquireOperationLease } from "@/lib/runtime/operation-lease";
 import {
   createPassMinimizeQueue,
-  usedWindowsToMinimize,
 } from "@/lib/runtime/pass-minimize";
 import { prepareWorkflow as bindWorkflow } from "@/lib/runtime/prepare";
 import { runtimeReducer } from "@/lib/runtime/reducer";
@@ -98,6 +97,7 @@ import {
   findProviderWindow,
   type ControlOwner,
   type ProviderWindow,
+  type RuntimeAction,
   type RuntimeMotion,
 } from "@/lib/runtime/state";
 import { useIsomorphicLayoutEffect } from "@/lib/use-isomorphic-layout-effect";
@@ -143,7 +143,7 @@ export function RuntimeProvider({
   directory: ProviderDirectory;
 }>) {
   const { catalog } = useProviderLibrary();
-  const [state, dispatch] = useReducer(
+  const [state, reactDispatch] = useReducer(
     runtimeReducer,
     account,
     createInitialRuntimeState,
@@ -151,10 +151,10 @@ export function RuntimeProvider({
   const [humanPendingIds, setHumanPendingIds] = useState<string[]>([]);
   const waitingOnHuman = humanPendingIds.length > 0;
   const stateRef = useRef(state);
-
-  useIsomorphicLayoutEffect(() => {
-    stateRef.current = state;
-  });
+  const dispatch = useCallback((action: RuntimeAction) => {
+    stateRef.current = runtimeReducer(stateRef.current, action);
+    reactDispatch(action);
+  }, []);
 
   const handlesRef = useRef(new ToolHandleRegistry());
   const executionAbortRef = useRef<AbortController | null>(null);
@@ -425,6 +425,14 @@ export function RuntimeProvider({
       }
       return current.filter((id) => id !== instanceId);
     });
+    if (!open) {
+      return;
+    }
+    dispatch({
+      type: "provider/focus",
+      instanceId,
+      touchedAt: Date.now(),
+    });
   }, []);
 
   const listProviders = useCallback(
@@ -616,15 +624,15 @@ export function RuntimeProvider({
             getModelContext: () => document.modelContext,
           },
         });
-        if (result.status === "success") {
-          passMinimizeQueue.enqueue(
-            usedWindowsToMinimize(
-              stateRef.current.workflow.steps,
-              (providerId) =>
-                findProviderWindow(stateRef.current, providerId)?.placement,
-            ),
-          );
-        }
+        // if (result.status === "success") {
+        //   passMinimizeQueue.enqueue(
+        //     usedWindowsToMinimize(
+        //       stateRef.current.workflow.steps,
+        //       (providerId) =>
+        //         findProviderWindow(stateRef.current, providerId)?.placement,
+        //     ),
+        //   );
+        // }
         return result;
       } finally {
         signal.removeEventListener("abort", onAbort);

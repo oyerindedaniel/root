@@ -133,7 +133,7 @@ export function CustomerSearch() {
       {status === "success" && customers.length === 0 ? (
         <p className="text-base text-muted-foreground">No matching customers.</p>
       ) : null}
-      {present.choosing ? <PresentAsk>Pick a customer.</PresentAsk> : null}
+      {present.choosing ? <PresentAsk>Pick a customer</PresentAsk> : null}
       <ul className="flex flex-col gap-3">
         {customers.map((customer, index) => (
           <SearchHit

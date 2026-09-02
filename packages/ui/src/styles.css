@@ -76,6 +76,18 @@
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
+
+  --animate-oscillating-dot: oscillating-dot 0.9s ease-in-out infinite;
+}
+
+@keyframes oscillating-dot {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 [data-app="accounts"] {
