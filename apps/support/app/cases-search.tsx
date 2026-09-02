@@ -1,17 +1,10 @@
 "use client";
 
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { useTRPCClient } from "@repo/api-client";
-import { requirePublicEnv } from "@repo/api-client/env";
 import {
-  SEARCH_CASES_INPUT_SCHEMA,
-  caseSearchText,
-  createDocumentVisibilityGate,
-  parseToolExecuteInput,
-  portableCaseReference,
   searchCasesInputSchema,
   searchCasesOutputSchema,
-  searchCasesToolInputSchema,
   type SupportCase,
 } from "@repo/contracts";
 import { Badge } from "@repo/ui/badge";
@@ -20,36 +13,26 @@ import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
 import { PresentAsk } from "@repo/ui/present-ask";
 import { SearchHit } from "@repo/ui/search-hit";
-import { useToolPresent } from "@repo/ui/tool-present";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+
+import { useWorkspace } from "./workspace-shell";
 
 type SearchStatus = "idle" | "pending" | "success" | "error";
 
-const rootOrigin = requirePublicEnv(
-  "NEXT_PUBLIC_ROOT_ORIGIN",
-  process.env.NEXT_PUBLIC_ROOT_ORIGIN,
-);
-
 export function CasesSearch() {
   const trpcClient = useTRPCClient();
+  const router = useRouter();
+  const { present, registerSearch } = useWorkspace();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [cases, setCases] = useState<SupportCase[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [boundAsk, setBoundAsk] = useState<string | null>(null);
   const queryInputRef = useRef<HTMLInputElement>(null);
-  const visibilityGateRef = useRef(createDocumentVisibilityGate());
-  const present = useToolPresent({
-    rootOrigin,
-    gate: visibilityGateRef.current,
-  });
 
   const runSearch = useCallback(
-    async (
-      nextQuery: string,
-      signal?: AbortSignal,
-      keepField = false,
-    ) => {
+    async (nextQuery: string, signal?: AbortSignal, keepField = false) => {
       const parsed = searchCasesInputSchema.parse({ query: nextQuery });
       if (!keepField) {
         setQuery(parsed.query);
@@ -80,143 +63,34 @@ export function CasesSearch() {
     [present.clear, trpcClient],
   );
 
-  useEffect(() => {
-    const modelContext = document.modelContext;
-    if (!modelContext) {
-      return;
-    }
-    const controller = new AbortController();
-    void modelContext.registerTool(
-      {
-        name: "search_cases",
-        title: "Search cases",
-        description:
-          "Searches support projections and visibly displays matching cases.",
-        inputSchema: SEARCH_CASES_INPUT_SCHEMA,
-        annotations: {
-          readOnlyHint: true,
-          untrustedContentHint: false,
-        },
-        execute: async (input, options) => {
-          const signal = options?.signal ?? controller.signal;
-          const parsed = searchCasesToolInputSchema.parse(
-            parseToolExecuteInput(input),
-          );
-          present.arm();
-          present.setCoedit(true);
-          try {
-            if (typeof parsed.query !== "string") {
-              if (visibilityGateRef.current.shouldPresent()) {
-                setBoundAsk(`Cases for ${parsed.query.displayName}`);
-              }
-              const text = caseSearchText(parsed.query);
-              const result = text
-                ? await runSearch(text, signal, true)
-                : searchCasesOutputSchema.parse({
-                    status: "success",
-                    query: parsed.query,
-                    cases: [],
-                  });
-              if (!text) {
-                setCases([]);
-                setStatus("success");
-              }
-              const selectedId = await present.waitForSelect({
-                candidateId: result.cases[0]?.id ?? null,
-                signal,
-              });
-              const hit = result.cases.find(
-                (supportCase) => supportCase.id === selectedId,
-              );
-              present.commit(selectedId ?? result.cases[0]?.id ?? null);
-              return {
-                ...result,
-                query: parsed.query,
-                ...(selectedId ? { selectedId } : {}),
-                ...(hit
-                  ? {
-                      selected: portableCaseReference(
-                        hit,
-                        new Date().toISOString(),
-                      ),
-                    }
-                  : {}),
-              };
-            }
-            const filled = await present.fill({
-              text: parsed.query,
-              setValue: setQuery,
-              input: queryInputRef.current,
-              signal,
-            });
-            if (filled?.yielded) {
-              await present.waitForPersist({ signal });
-            } else {
-              await present.preview({ signal });
-              const live =
-                queryInputRef.current?.value ?? filled?.text ?? parsed.query;
-              if (filled && live !== filled.text) {
-                await present.waitForPersist({ signal });
-              }
-            }
-            signal.throwIfAborted();
-            present.setCoedit(false);
-            const submitted =
-              queryInputRef.current?.value ?? filled?.text ?? parsed.query;
-            const result = await runSearch(submitted, signal);
-            const selectedId = await present.waitForSelect({
-              candidateId: result.cases[0]?.id ?? null,
-              signal,
-            });
-            const hit = result.cases.find(
-              (supportCase) => supportCase.id === selectedId,
-            );
-            present.commit(selectedId ?? result.cases[0]?.id ?? null);
-            return {
-              ...result,
-              ...(selectedId ? { selectedId } : {}),
-              ...(hit
-                ? {
-                    selected: portableCaseReference(
-                      hit,
-                      new Date().toISOString(),
-                    ),
-                  }
-                : {}),
-            };
-          } catch (caught) {
-            present.commit(null);
-            throw caught;
-          } finally {
-            present.setCoedit(false);
-            setBoundAsk(null);
-          }
-        },
+  useLayoutEffect(() => {
+    return registerSearch({
+      get queryInput() {
+        return queryInputRef.current;
       },
-      {
-        exposedTo: [rootOrigin],
-        signal: controller.signal,
+      setQuery,
+      setBoundAsk,
+      showEmptyBound: () => {
+        setCases([]);
+        setStatus("success");
       },
-    );
-    return () => controller.abort();
-  }, [
-    present.arm,
-    present.commit,
-    present.fill,
-    present.preview,
-    present.setCoedit,
-    present.waitForPersist,
-    present.waitForSelect,
-    runSearch,
-  ]);
+      runSearch,
+    });
+  }, [registerSearch, runSearch]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-medium">Cases</h1>
-        <p className="text-base text-muted-foreground">
-          Search cases. This page works without WebMCP.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-medium">Cases</h1>
+          <p className="text-base text-muted-foreground">
+            Search cases.
+          </p>
+        </div>
+        <Button variant="ghost" onClick={() => router.push("/cases/new")}>
+          <PlusIcon className="size-4" />
+          New
+        </Button>
       </header>
       <form
         className="flex flex-col gap-4"
@@ -272,7 +146,9 @@ export function CasesSearch() {
             ref={index === 0 ? present.firstHitRef : undefined}
             revealed={present.hitId === supportCase.id}
             onSelect={
-              present.choosing ? () => present.choose(supportCase.id) : undefined
+              present.choosing
+                ? () => present.choose(supportCase.id)
+                : () => router.push(`/cases/${supportCase.id}`)
             }
           >
             <p className="text-base font-medium">{supportCase.title}</p>

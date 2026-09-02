@@ -1,9 +1,18 @@
+import { TRPCError } from "@trpc/server";
 import {
+  createProductInputSchema,
+  createProductOutputSchema,
+  openProductOutputSchema,
+  productIdInputSchema,
   searchProductsInputSchema,
   searchProductsOutputSchema,
 } from "@repo/contracts";
 
-import { searchCatalog } from "@api/modules/shop/catalog.js";
+import {
+  createProduct,
+  getProduct,
+  searchCatalog,
+} from "@api/modules/shop/catalog.js";
 import { createTrpcRouter, publicProcedure } from "@api/trpc/trpc.js";
 
 export const shopRouter = createTrpcRouter({
@@ -19,4 +28,26 @@ export const shopRouter = createTrpcRouter({
       query: input.query,
       products: await searchCatalog(input.query),
     })),
+  getProduct: publicProcedure
+    .input(productIdInputSchema)
+    .output(openProductOutputSchema)
+    .query(async ({ input }) => {
+      const row = await getProduct(input.id);
+      if (!row) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found.",
+        });
+      }
+      return { status: "success" as const, product: row };
+    }),
+  createProduct: publicProcedure
+    .input(createProductInputSchema)
+    .output(createProductOutputSchema)
+    .mutation(async ({ input }) => {
+      return {
+        status: "success" as const,
+        product: await createProduct(input),
+      };
+    }),
 });

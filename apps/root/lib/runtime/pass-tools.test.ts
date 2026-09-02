@@ -149,6 +149,9 @@ describe("bindPassReadStep", () => {
     const step = binding.freeze("http://localhost:3001", null);
     expect(step.namespacedName).toBe("accounts.search_customers");
     expect(step.toolName).toBe("search_customers");
+    if (step.toolName !== "search_customers") {
+      throw new Error("expected search_customers");
+    }
     expect(step.arguments.query).toBe("ada");
   });
 
@@ -198,10 +201,17 @@ describe("bindPassReadStep", () => {
     if (!binding) {
       throw new Error("expected binding");
     }
+    if (binding.proposed.tool !== "search_cases") {
+      throw new Error("expected search_cases");
+    }
     expect(binding.proposed.arguments.query).toEqual({
       bind: { stepIndex: 0 },
     });
-    expect(binding.freeze("http://localhost:3003", null).arguments.query).toEqual(
+    const frozen = binding.freeze("http://localhost:3003", null);
+    if (frozen.toolName !== "search_cases") {
+      throw new Error("expected search_cases");
+    }
+    expect(frozen.arguments.query).toEqual(
       { bind: { stepIndex: 0 } },
     );
   });

@@ -1,5 +1,5 @@
-import { ilike, or } from "drizzle-orm";
-import type { Customer } from "@repo/contracts";
+import { eq, ilike, or } from "drizzle-orm";
+import type { Customer, CreateCustomerInput } from "@repo/contracts";
 import { db } from "@repo/db";
 import { customer } from "@repo/db/schema";
 
@@ -23,6 +23,41 @@ export async function searchCustomers(query: string): Promise<Customer[]> {
     .from(customer)
     .where(where)
     .limit(12);
+}
+
+export async function getCustomer(id: string): Promise<Customer | null> {
+  const rows = await db
+    .select({
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+    })
+    .from(customer)
+    .where(eq(customer.id, id))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function createCustomer(
+  input: CreateCustomerInput,
+): Promise<Customer> {
+  const rows = await db
+    .insert(customer)
+    .values({
+      id: `cust_${crypto.randomUUID()}`,
+      name: input.name,
+      email: input.email,
+    })
+    .returning({
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+    });
+  const created = rows[0];
+  if (!created) {
+    throw new Error("Customer insert returned no row.");
+  }
+  return created;
 }
 
 export async function seedCustomers(): Promise<void> {

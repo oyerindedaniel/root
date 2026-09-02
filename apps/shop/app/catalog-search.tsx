@@ -1,13 +1,8 @@
 "use client";
 
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { useTRPCClient } from "@repo/api-client";
-import { requirePublicEnv } from "@repo/api-client/env";
 import {
-  SEARCH_PRODUCTS_INPUT_SCHEMA,
-  createDocumentVisibilityGate,
-  parseToolExecuteInput,
-  portableProductReference,
   searchProductsInputSchema,
   searchProductsOutputSchema,
   type ShopProduct,
@@ -18,28 +13,22 @@ import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
 import { PresentAsk } from "@repo/ui/present-ask";
 import { SearchHit } from "@repo/ui/search-hit";
-import { useToolPresent } from "@repo/ui/tool-present";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+
+import { useWorkspace } from "./workspace-shell";
 
 type SearchStatus = "idle" | "pending" | "success" | "error";
 
-const rootOrigin = requirePublicEnv(
-  "NEXT_PUBLIC_ROOT_ORIGIN",
-  process.env.NEXT_PUBLIC_ROOT_ORIGIN,
-);
-
 export function CatalogSearch() {
   const trpcClient = useTRPCClient();
+  const router = useRouter();
+  const { present, registerSearch } = useWorkspace();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [products, setProducts] = useState<ShopProduct[]>([]);
   const [error, setError] = useState<string | null>(null);
   const queryInputRef = useRef<HTMLInputElement>(null);
-  const visibilityGateRef = useRef(createDocumentVisibilityGate());
-  const present = useToolPresent({
-    rootOrigin,
-    gate: visibilityGateRef.current,
-  });
 
   const runSearch = useCallback(
     async (nextQuery: string, signal?: AbortSignal) => {
@@ -71,104 +60,29 @@ export function CatalogSearch() {
     [present.clear, trpcClient],
   );
 
-  useEffect(() => {
-    const modelContext = document.modelContext;
-    if (!modelContext) {
-      return;
-    }
-    const controller = new AbortController();
-    void modelContext.registerTool(
-      {
-        name: "search_products",
-        title: "Search products",
-        description:
-          "Searches the catalog and visibly displays matching products.",
-        inputSchema: SEARCH_PRODUCTS_INPUT_SCHEMA,
-        annotations: {
-          readOnlyHint: true,
-          untrustedContentHint: false,
-        },
-        execute: async (input, options) => {
-          const signal = options?.signal ?? controller.signal;
-          const parsed = searchProductsInputSchema.parse(
-            parseToolExecuteInput(input),
-          );
-          present.arm();
-          present.setCoedit(true);
-          try {
-            const filled = await present.fill({
-              text: parsed.query,
-              setValue: setQuery,
-              input: queryInputRef.current,
-              signal,
-            });
-            if (filled?.yielded) {
-              await present.waitForPersist({ signal });
-            } else {
-              await present.preview({ signal });
-              const live =
-                queryInputRef.current?.value ?? filled?.text ?? parsed.query;
-              if (filled && live !== filled.text) {
-                await present.waitForPersist({ signal });
-              }
-            }
-            signal.throwIfAborted();
-            present.setCoedit(false);
-            const submitted =
-              queryInputRef.current?.value ?? filled?.text ?? parsed.query;
-            const result = await runSearch(submitted, signal);
-            const selectedId = await present.waitForSelect({
-              candidateId: result.products[0]?.id ?? null,
-              signal,
-            });
-            const hit = result.products.find(
-              (product) => product.id === selectedId,
-            );
-            present.commit(selectedId ?? result.products[0]?.id ?? null);
-            return {
-              ...result,
-              ...(selectedId ? { selectedId } : {}),
-              ...(hit
-                ? {
-                    selected: portableProductReference(
-                      hit,
-                      new Date().toISOString(),
-                    ),
-                  }
-                : {}),
-            };
-          } catch (caught) {
-            present.commit(null);
-            throw caught;
-          } finally {
-            present.setCoedit(false);
-          }
-        },
+  useLayoutEffect(() => {
+    return registerSearch({
+      get queryInput() {
+        return queryInputRef.current;
       },
-      {
-        exposedTo: [rootOrigin],
-        signal: controller.signal,
-      },
-    );
-    return () => controller.abort();
-  }, [
-    present.arm,
-    present.commit,
-    present.fill,
-    present.preview,
-    present.setCoedit,
-    present.waitForPersist,
-    present.waitForSelect,
-    runSearch,
-  ]);
+      setQuery,
+      runSearch,
+    });
+  }, [registerSearch, runSearch]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-medium">Catalog</h1>
-        <p className="text-base text-muted-foreground">
-          Search the catalog. This page works without WebMCP.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-medium">Catalog</h1>
+          <p className="text-base text-muted-foreground">
+            Search the catalog.
+          </p>
+        </div>
+        <Button variant="ghost" onClick={() => router.push("/products/new")}>
+          <PlusIcon className="size-4" />
+          New
+        </Button>
       </header>
       <form
         className="flex flex-col gap-4"
@@ -222,7 +136,9 @@ export function CatalogSearch() {
             ref={index === 0 ? present.firstHitRef : undefined}
             revealed={present.hitId === product.id}
             onSelect={
-              present.choosing ? () => present.choose(product.id) : undefined
+              present.choosing
+                ? () => present.choose(product.id)
+                : () => router.push(`/products/${product.id}`)
             }
           >
             <p className="text-base font-medium">{product.name}</p>

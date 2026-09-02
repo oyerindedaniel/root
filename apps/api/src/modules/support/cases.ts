@@ -1,5 +1,5 @@
-import { ilike, or } from "drizzle-orm";
-import type { SupportCase } from "@repo/contracts";
+import { eq, ilike, or } from "drizzle-orm";
+import type { CreateCaseInput, SupportCase } from "@repo/contracts";
 import { db } from "@repo/db";
 import { supportCase } from "@repo/db/schema";
 
@@ -28,6 +28,48 @@ export async function searchCases(query: string): Promise<SupportCase[]> {
     .from(supportCase)
     .where(where)
     .limit(12);
+}
+
+export async function getCase(id: string): Promise<SupportCase | null> {
+  const rows = await db
+    .select({
+      id: supportCase.id,
+      title: supportCase.title,
+      customerName: supportCase.customerName,
+      customerEmail: supportCase.customerEmail,
+      orderRef: supportCase.orderRef,
+      status: supportCase.status,
+    })
+    .from(supportCase)
+    .where(eq(supportCase.id, id))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function createCase(input: CreateCaseInput): Promise<SupportCase> {
+  const rows = await db
+    .insert(supportCase)
+    .values({
+      id: `case_${crypto.randomUUID()}`,
+      title: input.title,
+      customerName: input.customerName,
+      customerEmail: input.customerEmail,
+      orderRef: input.orderRef,
+      status: "open",
+    })
+    .returning({
+      id: supportCase.id,
+      title: supportCase.title,
+      customerName: supportCase.customerName,
+      customerEmail: supportCase.customerEmail,
+      orderRef: supportCase.orderRef,
+      status: supportCase.status,
+    });
+  const created = rows[0];
+  if (!created) {
+    throw new Error("Case insert returned no row.");
+  }
+  return created;
 }
 
 export async function seedCases(): Promise<void> {

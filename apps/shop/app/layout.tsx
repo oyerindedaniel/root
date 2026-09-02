@@ -3,6 +3,7 @@ import type { PropsWithChildren } from "react";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import { TrpcReactProvider } from "@repo/api-client";
+import { WorkspaceShell } from "./workspace-shell";
 import "./globals.css";
 
 const inter = Inter({
@@ -29,7 +30,9 @@ export default function RootLayout({ children }: PropsWithChildren) {
       className={`app-scroll ${inter.variable} ${geistMono.variable}`}
     >
       <body className="bg-background font-sans text-foreground antialiased">
-        <TrpcReactProvider>{children}</TrpcReactProvider>
+        <TrpcReactProvider>
+          <WorkspaceShell>{children}</WorkspaceShell>
+        </TrpcReactProvider>
       </body>
     </html>
   );

@@ -1,13 +1,8 @@
 "use client";
 
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { useTRPCClient } from "@repo/api-client";
-import { requirePublicEnv } from "@repo/api-client/env";
 import {
-  SEARCH_CUSTOMERS_INPUT_SCHEMA,
-  createDocumentVisibilityGate,
-  parseToolExecuteInput,
-  portableCustomerReference,
   searchCustomersInputSchema,
   searchCustomersOutputSchema,
   type Customer,
@@ -18,28 +13,22 @@ import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
 import { PresentAsk } from "@repo/ui/present-ask";
 import { SearchHit } from "@repo/ui/search-hit";
-import { useToolPresent } from "@repo/ui/tool-present";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+
+import { useWorkspace } from "./workspace-shell";
 
 type SearchStatus = "idle" | "pending" | "success" | "error";
 
-const rootOrigin = requirePublicEnv(
-  "NEXT_PUBLIC_ROOT_ORIGIN",
-  process.env.NEXT_PUBLIC_ROOT_ORIGIN,
-);
-
 export function CustomerSearch() {
   const trpcClient = useTRPCClient();
+  const router = useRouter();
+  const { present, registerSearch } = useWorkspace();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [error, setError] = useState<string | null>(null);
   const queryInputRef = useRef<HTMLInputElement>(null);
-  const visibilityGateRef = useRef(createDocumentVisibilityGate());
-  const present = useToolPresent({
-    rootOrigin,
-    gate: visibilityGateRef.current,
-  });
 
   const runSearch = useCallback(
     async (nextQuery: string, signal?: AbortSignal) => {
@@ -73,104 +62,32 @@ export function CustomerSearch() {
     [present.clear, trpcClient],
   );
 
-  useEffect(() => {
-    const modelContext = document.modelContext;
-    if (!modelContext) {
-      return;
-    }
-    const controller = new AbortController();
-    void modelContext.registerTool(
-      {
-        name: "search_customers",
-        title: "Search customers",
-        description:
-          "Searches the directory and visibly displays matching customers.",
-        inputSchema: SEARCH_CUSTOMERS_INPUT_SCHEMA,
-        annotations: {
-          readOnlyHint: true,
-          untrustedContentHint: false,
-        },
-        execute: async (input, options) => {
-          const signal = options?.signal ?? controller.signal;
-          const parsed = searchCustomersInputSchema.parse(
-            parseToolExecuteInput(input),
-          );
-          present.arm();
-          present.setCoedit(true);
-          try {
-            const filled = await present.fill({
-              text: parsed.query,
-              setValue: setQuery,
-              input: queryInputRef.current,
-              signal,
-            });
-            if (filled?.yielded) {
-              await present.waitForPersist({ signal });
-            } else {
-              await present.preview({ signal });
-              const live =
-                queryInputRef.current?.value ?? filled?.text ?? parsed.query;
-              if (filled && live !== filled.text) {
-                await present.waitForPersist({ signal });
-              }
-            }
-            signal.throwIfAborted();
-            present.setCoedit(false);
-            const submitted =
-              queryInputRef.current?.value ?? filled?.text ?? parsed.query;
-            const result = await runSearch(submitted, signal);
-            const selectedId = await present.waitForSelect({
-              candidateId: result.customers[0]?.id ?? null,
-              signal,
-            });
-            const hit = result.customers.find(
-              (customer) => customer.id === selectedId,
-            );
-            present.commit(selectedId ?? result.customers[0]?.id ?? null);
-            return {
-              ...result,
-              ...(selectedId ? { selectedId } : {}),
-              ...(hit
-                ? {
-                    selected: portableCustomerReference(
-                      hit,
-                      new Date().toISOString(),
-                    ),
-                  }
-                : {}),
-            };
-          } catch (caught) {
-            present.commit(null);
-            throw caught;
-          } finally {
-            present.setCoedit(false);
-          }
-        },
+  useLayoutEffect(() => {
+    return registerSearch({
+      get queryInput() {
+        return queryInputRef.current;
       },
-      {
-        exposedTo: [rootOrigin],
-        signal: controller.signal,
-      },
-    );
-    return () => controller.abort();
-  }, [
-    present.arm,
-    present.commit,
-    present.fill,
-    present.preview,
-    present.setCoedit,
-    present.waitForPersist,
-    present.waitForSelect,
-    runSearch,
-  ]);
+      setQuery,
+      runSearch,
+    });
+  }, [registerSearch, runSearch]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-medium">Customers</h1>
-        <p className="text-base text-muted-foreground">
-          Search customers. This page works without WebMCP.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-medium">Customers</h1>
+          <p className="text-base text-muted-foreground">
+            Search customers.
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          onClick={() => router.push("/customers/new")}
+        >
+          <PlusIcon className="size-4" />
+          New
+        </Button>
       </header>
       <form
         className="flex flex-col gap-4"
@@ -224,7 +141,9 @@ export function CustomerSearch() {
             ref={index === 0 ? present.firstHitRef : undefined}
             revealed={present.hitId === customer.id}
             onSelect={
-              present.choosing ? () => present.choose(customer.id) : undefined
+              present.choosing
+                ? () => present.choose(customer.id)
+                : () => router.push(`/customers/${customer.id}`)
             }
           >
             <p className="text-base font-medium">{customer.name}</p>

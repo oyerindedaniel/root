@@ -109,6 +109,25 @@ const caseOutput = {
   ],
 };
 
+const openCustomerStep: PreparedWorkflowStep = {
+  providerId: "accounts",
+  origin: origins.accounts,
+  toolName: "open_customer",
+  namespacedName: "accounts.open_customer",
+  schemaFingerprint: null,
+  arguments: { id: { bind: { stepIndex: 0 } } },
+  readOnly: true,
+};
+
+const openCustomerOutput = {
+  status: "success",
+  customer: {
+    id: "customer_1",
+    name: "Ada",
+    email: "ada@localhost",
+  },
+};
+
 function descriptor(step: PreparedWorkflowStep): NormalizedToolDescriptor {
   return {
     providerId: step.providerId,
@@ -120,7 +139,7 @@ function descriptor(step: PreparedWorkflowStep): NormalizedToolDescriptor {
     inputSchema: { type: "object" },
     schemaFingerprint: "live-fingerprint",
     invokeKind: "object",
-    readOnlyHint: true,
+    readOnlyHint: step.readOnly,
     untrustedContentHint: false,
   };
 }
@@ -130,7 +149,7 @@ function handle(step: PreparedWorkflowStep): RegisteredTool {
     name: step.toolName,
     origin: step.origin,
     inputSchema: { type: "object" },
-    annotations: { readOnlyHint: true, untrustedContentHint: false },
+    annotations: { readOnlyHint: step.readOnly, untrustedContentHint: false },
   };
 }
 
@@ -179,28 +198,35 @@ function createHarness(steps: PreparedWorkflowStep[]) {
   });
   const discover = vi.fn(async (providerId: string) => {
     events.push(`discover:${providerId}`);
-    const step = steps.find((candidate) => candidate.providerId === providerId);
+    const providerSteps = steps.filter(
+      (candidate) => candidate.providerId === providerId,
+    );
+    const step = providerSteps[0];
     if (!step) {
       return boundedError("discovery_failed", "Capability discovery failed.");
     }
-    setLiveProvider(step);
+    const tools = providerSteps.map((candidate) => descriptor(candidate));
+    setLiveProvider(step, tools);
     return boundedSuccess({
       providerId: step.providerId,
       origin: step.origin,
       contractVersion: "1.0.0",
-      tools: [descriptor(step)],
+      tools,
     });
   });
   const executeTool = vi.fn(
     async (options: Parameters<NonNullable<ExecutePassDependencies["executeTool"]>>[0]) => {
       events.push(`execute:${options.tool.name}`);
-      return JSON.stringify(
-        options.tool.name === "search_products"
-          ? productOutput
-          : options.tool.name === "search_cases"
-            ? caseOutput
-            : customerOutput,
-      );
+      if (options.tool.name === "search_products") {
+        return JSON.stringify(productOutput);
+      }
+      if (options.tool.name === "search_cases") {
+        return JSON.stringify(caseOutput);
+      }
+      if (options.tool.name === "open_customer") {
+        return JSON.stringify(openCustomerOutput);
+      }
+      return JSON.stringify(customerOutput);
     },
   );
   const dependencies: ExecutePassDependencies = {
@@ -483,6 +509,16 @@ describe("executePass", () => {
     });
     expect(harness.executeTool.mock.calls[1]?.[0]?.input).not.toEqual({
       query: "ada@localhost",
+    });
+  });
+
+  it("delivers the earlier selected sourceId to a bound open step", async () => {
+    const harness = createHarness([customerStep, openCustomerStep]);
+    const result = await run(harness);
+
+    expect(result.status).toBe("success");
+    expect(harness.executeTool.mock.calls[1]?.[0]?.input).toEqual({
+      id: "customer_1",
     });
   });
 

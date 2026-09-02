@@ -11,7 +11,7 @@ import {
 } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { workflowQueryLabel } from "@repo/contracts";
+import { workflowQueryLabel, type PreparedWorkflowStep } from "@repo/contracts";
 import { cn } from "@repo/ui/lib/cn";
 
 import { WorkflowPanel } from "@/components/workspace/workflow-panel";
@@ -40,6 +40,17 @@ import {
 const DRAG_CLICK_SLOP = 8;
 const LABEL_COLLAPSE_GRACE = 240;
 const LABEL_EASE = [0.16, 1, 0.3, 1] as const;
+
+function argumentLabel(step: PreparedWorkflowStep | null | undefined) {
+  if (!step) {
+    return null;
+  }
+  const query = workflowQueryLabel(Reflect.get(step.arguments, "query"));
+  if (query) {
+    return query;
+  }
+  return workflowQueryLabel(Reflect.get(step.arguments, "id"));
+}
 
 function snapTransition(reduceMotion: boolean | null) {
   if (reduceMotion === true) {
@@ -461,7 +472,13 @@ function pillLabel(
     return provider ? `Discovering ${provider.label}` : "Discovering";
   }
   if (state.workflow.lifecycle === "executing") {
-    const label = workflowQueryLabel(state.workflow.step?.arguments.query);
+    const label = argumentLabel(state.workflow.step);
+    if (state.workflow.step?.toolName.startsWith("open_")) {
+      return label ? `Opening ${label}` : "Opening";
+    }
+    if (state.workflow.step?.toolName.startsWith("create_")) {
+      return "Creating";
+    }
     return label ? `Searching "${label}"` : "Running";
   }
   return "Running";
@@ -474,7 +491,7 @@ function inspectRows(
 ) {
   const providerWindow = focusedProviderWindow(state);
   const provider = currentProvider(catalog, providerWindow?.providerId ?? null);
-  const query = workflowQueryLabel(state.workflow.step?.arguments.query);
+  const query = argumentLabel(state.workflow.step);
   const waiting = waitingProviderIds(state, pendingInstanceIds).flatMap(
     (providerId) => {
       const waitingProvider = currentProvider(catalog, providerId);

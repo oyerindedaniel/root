@@ -253,16 +253,23 @@ function resolveStepArguments(
   step: PreparedWorkflowStep,
   results: WorkflowStepResult[],
 ) {
-  const query = step.arguments.query;
-  if (!isBindQuery(query)) {
-    return step.arguments;
+  const input: Record<string, unknown> = { ...step.arguments };
+  for (const [key, value] of Object.entries(input)) {
+    if (!isBindQuery(value)) {
+      continue;
+    }
+    const data = results[value.bind.stepIndex]?.data;
+    if (!data || !("selected" in data) || !data.selected) {
+      throw new GatewayError(
+        "execution_failed",
+        "Workflow execution failed.",
+      );
+    }
+    if (key === "id") {
+      input[key] = data.selected.sourceId;
+      continue;
+    }
+    input[key] = data.selected;
   }
-  const selected = results[query.bind.stepIndex]?.data.selected;
-  if (!selected) {
-    throw new GatewayError(
-      "execution_failed",
-      "Workflow execution failed.",
-    );
-  }
-  return { query: selected };
+  return input;
 }

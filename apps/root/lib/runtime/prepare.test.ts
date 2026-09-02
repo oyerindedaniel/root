@@ -41,6 +41,7 @@ function addReadyProvider(
   providerId: "shop" | "accounts" | "support",
   toolName: string,
   namespacedName: string,
+  readOnlyHint = true,
 ) {
   const instanceId = `${providerId}_1`;
   const origin = origins[providerId];
@@ -72,7 +73,7 @@ function addReadyProvider(
         inputSchema: { type: "object" },
         schemaFingerprint: fingerprint,
         invokeKind: "object",
-        readOnlyHint: true,
+        readOnlyHint,
         untrustedContentHint: false,
       },
     ],
@@ -431,9 +432,127 @@ describe("prepareWorkflow", () => {
     });
     expect(prepared.ok).toBe(true);
     if (prepared.ok) {
-      expect(prepared.steps[1]?.arguments.query).toEqual({
+      const step = prepared.steps[1];
+      if (!step || step.toolName !== "search_cases") {
+        throw new Error("expected search_cases");
+      }
+      expect(step.arguments.query).toEqual({
         bind: { stepIndex: 0 },
       });
+    }
+  });
+
+  it("freezes an open id bound to an earlier selected step", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "search_customers",
+          arguments: { query: "ada" },
+        },
+        {
+          providerId: "accounts",
+          tool: "open_customer",
+          arguments: { id: { bind: { stepIndex: 0 } } },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.steps[1]?.arguments).toEqual({
+        id: { bind: { stepIndex: 0 } },
+      });
+      expect(prepared.steps[1]?.readOnly).toBe(true);
+    }
+  });
+
+  it("rejects an open id bind that is not an earlier step", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "open_customer",
+          arguments: { id: { bind: { stepIndex: 0 } } },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(false);
+    if (!prepared.ok) {
+      expect(prepared.error.code).toBe("unsupported_graph");
+    }
+  });
+
+  it("freezes a create step as a write", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "create_customer",
+          arguments: { name: "Ada", email: "ada@localhost" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.steps[0]?.namespacedName).toBe(
+        "accounts.create_customer",
+      );
+      expect(prepared.steps[0]?.readOnly).toBe(false);
+    }
+  });
+
+  it("accepts a live create tool whose hint is a write", () => {
+    const prepared = prepareWorkflow({
+      state: addReadyProvider(
+        createInitialRuntimeState(account),
+        "accounts",
+        "create_customer",
+        "accounts.create_customer",
+        false,
+      ),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "create_customer",
+          arguments: { name: "Ada", email: "ada@localhost" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(true);
+  });
+
+  it("rejects a live create tool that still claims to be read-only", () => {
+    const prepared = prepareWorkflow({
+      state: addReadyProvider(
+        createInitialRuntimeState(account),
+        "accounts",
+        "create_customer",
+        "accounts.create_customer",
+      ),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "create_customer",
+          arguments: { name: "Ada", email: "ada@localhost" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(false);
+    if (!prepared.ok) {
+      expect(prepared.error.code).toBe("unsupported_graph");
     }
   });
 

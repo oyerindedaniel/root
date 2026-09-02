@@ -235,6 +235,7 @@ describe("gateway envelopes", () => {
             label: "Customers",
             source: "builtin",
             capability: "workflow-ready",
+            passTools: ["search_customers"],
           },
           {
             providerId: "custom-analytics-1",
@@ -246,6 +247,18 @@ describe("gateway envelopes", () => {
         ],
       }).providers,
     ).toHaveLength(2);
+    expect(
+      listProvidersOutputSchema.safeParse({
+        providers: [
+          {
+            providerId: "accounts",
+            label: "Customers",
+            source: "builtin",
+            capability: "workflow-ready",
+          },
+        ],
+      }).success,
+    ).toBe(false);
     expect(
       proposedWorkflowStepSchema.safeParse({
         providerId: "custom-analytics-1",
@@ -452,8 +465,20 @@ describe("gateway envelopes", () => {
       expectTypeOf(result.data.products).toEqualTypeOf<ShopProduct[]>();
     } else if (result.tool === "support.search_cases") {
       expectTypeOf(result.data.cases).toEqualTypeOf<SupportCase[]>();
-    } else {
+    } else if (result.tool === "accounts.search_customers") {
       expectTypeOf(result.data.customers).toEqualTypeOf<Customer[]>();
+    } else if (
+      result.tool === "accounts.open_customer" ||
+      result.tool === "accounts.create_customer"
+    ) {
+      expectTypeOf(result.data.customer).toEqualTypeOf<Customer>();
+    } else if (
+      result.tool === "shop.open_product" ||
+      result.tool === "shop.create_product"
+    ) {
+      expectTypeOf(result.data.product).toEqualTypeOf<ShopProduct>();
+    } else {
+      expectTypeOf(result.data.case).toEqualTypeOf<SupportCase>();
     }
   });
 });

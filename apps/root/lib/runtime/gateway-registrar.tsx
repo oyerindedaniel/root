@@ -4,6 +4,7 @@ import {
   boundedError,
   cancelWorkflowInputSchema,
   discoverCapabilitiesInputSchema,
+  explainPrepareWorkflowIngress,
   executeWorkflowInputSchema,
   inspectWorkflowInputSchema,
   invokeGrantedToolInputSchema,
@@ -109,7 +110,7 @@ export async function registerGatewayTools(
       name: "list_providers",
       title: "List providers",
       description:
-        "List configured provider IDs, capabilities, and human-granted custom tools.",
+        "List configured provider IDs, capabilities, builtin passTools for prepare_workflow, and human-granted custom tools.",
       inputSchema: {
         type: "object",
         properties: {},
@@ -223,24 +224,37 @@ export async function registerGatewayTools(
     {
       name: "prepare_workflow",
       title: "Prepare workflow",
-      description: `Prepare 1 to ${MAX_PREPARED_WORKFLOW_STEPS} sequential read-only search steps against trusted providers.`,
+      description: `Prepare 1 to ${MAX_PREPARED_WORKFLOW_STEPS} sequential allowlisted steps against trusted providers. Each step is providerId, a short tool from list_providers passTools (search_products, not shop.search_products), and arguments. Search and open are reads. Create is a write after a human persist on stage. Do not call discover_capabilities first; execute_workflow mounts and rediscovers.`,
       inputSchema: {
         type: "object",
         properties: {
-          steps: { type: "array", description: "Workflow steps to prepare." },
+          steps: {
+            type: "array",
+            description:
+              "Each step is { providerId, tool, arguments }. tool is the short passTools name, not shop.search_products.",
+          },
         },
         required: ["steps"],
       },
       annotations: { readOnlyHint: true, untrustedContentHint: false },
       execute: async (input) => {
-        const parsed = parseIngress(prepareWorkflowInputSchema, input);
-        if (!parsed) {
+        let raw: unknown;
+        try {
+          raw = parseToolExecuteInput(input);
+        } catch {
           return boundedError(
             "invalid_arguments",
-            `prepare_workflow requires 1 to ${MAX_PREPARED_WORKFLOW_STEPS} allowlisted search steps.`,
+            explainPrepareWorkflowIngress(undefined),
           );
         }
-        return handlersRef.current.prepareWorkflow(parsed);
+        const parsed = prepareWorkflowInputSchema.safeParse(raw);
+        if (!parsed.success) {
+          return boundedError(
+            "invalid_arguments",
+            explainPrepareWorkflowIngress(raw),
+          );
+        }
+        return handlersRef.current.prepareWorkflow(parsed.data);
       },
     },
     { signal },

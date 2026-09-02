@@ -276,6 +276,38 @@ describe("registerGatewayTools", () => {
     });
   });
 
+  it("names the short prepare tool when the step uses a namespaced pass name", async () => {
+    const tools = setup();
+    const gatewayHandlers = handlers();
+    gatewayHandlers.prepareWorkflow = vi.fn(
+      gatewayHandlers.prepareWorkflow,
+    );
+    await registerGatewayTools(new AbortController().signal, {
+      current: gatewayHandlers,
+    });
+    const result = await tools
+      .find((tool) => tool.name === "prepare_workflow")
+      ?.execute(
+        {
+          steps: [
+            {
+              providerId: "shop",
+              tool: "shop.search_products",
+              arguments: { query: "keyboard" },
+            },
+          ],
+        },
+        { signal: new AbortController().signal },
+      );
+    expect(result).toEqual(
+      boundedError(
+        "invalid_arguments",
+        "prepare_workflow tool must be search_products, not shop.search_products.",
+      ),
+    );
+    expect(gatewayHandlers.prepareWorkflow).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["list_providers", { extra: true }],
     ["discover_capabilities", { providerId: "shop", extra: true }],

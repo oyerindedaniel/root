@@ -151,15 +151,27 @@ export type BoundedResultEnvelope<
   TCode extends GatewayErrorCode = GatewayErrorCode,
 > = BoundedSuccess<TData> | BoundedError<TCode>;
 
-export const SHOP_EXPECTED_TOOLS = ["search_products"] as const;
+export const SHOP_EXPECTED_TOOLS = [
+  "search_products",
+  "open_product",
+  "create_product",
+] as const;
 
 export const SHOP_CONTRACT_VERSION = "1.0.0" satisfies ContractVersion;
 
-export const ACCOUNTS_EXPECTED_TOOLS = ["search_customers"] as const;
+export const ACCOUNTS_EXPECTED_TOOLS = [
+  "search_customers",
+  "open_customer",
+  "create_customer",
+] as const;
 
 export const ACCOUNTS_CONTRACT_VERSION = "1.0.0" satisfies ContractVersion;
 
-export const SUPPORT_EXPECTED_TOOLS = ["search_cases"] as const;
+export const SUPPORT_EXPECTED_TOOLS = [
+  "search_cases",
+  "open_case",
+  "create_case",
+] as const;
 
 export const SUPPORT_CONTRACT_VERSION = "1.0.0" satisfies ContractVersion;
 

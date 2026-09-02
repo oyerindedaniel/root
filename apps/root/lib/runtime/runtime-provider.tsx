@@ -437,6 +437,7 @@ export function RuntimeProvider({
                 label: provider.label,
                 source: "builtin",
                 capability: "workflow-ready",
+                passTools: [...provider.expectedTools],
               }
             : {
                 providerId: provider.id,

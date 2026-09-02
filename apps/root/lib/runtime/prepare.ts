@@ -2,6 +2,7 @@ import {
   boundedError,
   isBindQuery,
   MAX_PREPARED_WORKFLOW_STEPS,
+  namespacedToolName,
   type BuiltinProviderId,
   type BoundedError,
   type NormalizedToolDescriptor,
@@ -9,7 +10,7 @@ import {
   type ProviderId,
 } from "@repo/contracts";
 
-import { bindPassReadStep } from "./pass-tools";
+import { bindPassReadStep, getPassReadTool } from "./pass-tools";
 import { findProviderWindow, type RuntimeState } from "./state";
 
 export function prepareWorkflow(options: {
@@ -28,7 +29,7 @@ export function prepareWorkflow(options: {
       ok: false,
       error: boundedError(
         "unsupported_graph",
-        `This pass accepts 1 to ${MAX_PREPARED_WORKFLOW_STEPS} sequential read-only search steps.`,
+        `This pass accepts 1 to ${MAX_PREPARED_WORKFLOW_STEPS} sequential allowlisted steps.`,
       ),
     };
   }
@@ -88,12 +89,12 @@ export function revalidatePreparedStep(options: {
       ),
     };
   }
-  if (!tool.readOnlyHint) {
+  if (Boolean(tool.readOnlyHint) !== step.readOnly) {
     return {
       ok: false,
       error: boundedError(
         "revalidation_failed",
-        "The prepared tool is no longer read-only.",
+        "The prepared tool's read-only contract changed.",
       ),
     };
   }
@@ -131,10 +132,28 @@ function bindProposedStep(options: {
     };
   }
   const proposed = binding.proposed;
-  if (isBindQuery(proposed.arguments.query)) {
+  const query = Reflect.get(proposed.arguments, "query");
+  if (isBindQuery(query)) {
     if (
       proposed.tool !== "search_cases" ||
-      proposed.arguments.query.bind.stepIndex >= options.index
+      query.bind.stepIndex >= options.index
+    ) {
+      return {
+        ok: false,
+        error: boundedError(
+          "unsupported_graph",
+          "Each step needs an allowlisted provider, tool, and arguments.",
+        ),
+      };
+    }
+  }
+  const id = Reflect.get(proposed.arguments, "id");
+  if (isBindQuery(id)) {
+    if (
+      (proposed.tool !== "open_customer" &&
+        proposed.tool !== "open_product" &&
+        proposed.tool !== "open_case") ||
+      id.bind.stepIndex >= options.index
     ) {
       return {
         ok: false,
@@ -177,12 +196,15 @@ function bindProposedStep(options: {
         ),
       };
     }
-    if (!tool.readOnlyHint) {
+    const passTool = getPassReadTool(
+      namespacedToolName(proposed.providerId, proposed.tool),
+    );
+    if (!passTool || Boolean(tool.readOnlyHint) !== passTool.readOnly) {
       return {
         ok: false,
         error: boundedError(
           "unsupported_graph",
-          "Only read-only search tools are supported in this pass.",
+          "The live tool's read-only contract does not match this pass step.",
         ),
       };
     }

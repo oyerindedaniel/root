@@ -23,15 +23,25 @@ describe("loadProviderDirectory", () => {
     const accounts = getBuiltinProvider(directory, "accounts");
     const support = getBuiltinProvider(directory, "support");
     expect(shop.origin).toBe("http://localhost:3002");
-    expect(shop.expectedTools).toEqual(["search_products"]);
+    expect(shop.expectedTools).toEqual([
+      "search_products",
+      "open_product",
+      "create_product",
+    ]);
     expect(shop.source).toBe("builtin");
     expect(shop.capability).toBe("workflow-ready");
     expect(accounts.origin).toBe("http://localhost:3001");
     expect(accounts.expectedTools).toEqual([
       "search_customers",
+      "open_customer",
+      "create_customer",
     ]);
     expect(support.origin).toBe("http://localhost:3003");
-    expect(support.expectedTools).toEqual(["search_cases"]);
+    expect(support.expectedTools).toEqual([
+      "search_cases",
+      "open_case",
+      "create_case",
+    ]);
     expect(shop.label).toBe("Catalog");
     expect(accounts.label).toBe("Customers");
     expect(support.label).toBe("Cases");

@@ -1,8 +1,26 @@
 import {
   namespacedToolName,
+  proposedCaseCreateStepSchema,
+  proposedCaseOpenStepSchema,
   proposedCaseSearchStepSchema,
+  proposedCustomerCreateStepSchema,
+  proposedCustomerOpenStepSchema,
   proposedCustomerSearchStepSchema,
+  proposedProductCreateStepSchema,
+  proposedProductOpenStepSchema,
   proposedProductSearchStepSchema,
+  createCaseInputSchema,
+  createCaseOutputSchema,
+  createCustomerInputSchema,
+  createCustomerOutputSchema,
+  createProductInputSchema,
+  createProductOutputSchema,
+  openCaseOutputSchema,
+  openCaseProposedArgumentsSchema,
+  openCustomerOutputSchema,
+  openCustomerProposedArgumentsSchema,
+  openProductOutputSchema,
+  openProductProposedArgumentsSchema,
   searchCasesOutputSchema,
   searchCasesProposedArgumentsSchema,
   searchCustomersInputSchema,
@@ -20,6 +38,7 @@ import type { z } from "zod";
 function definePassTool<
   const TProvider extends BuiltinProviderId,
   const TTool extends string,
+  const TReadOnly extends boolean,
   TInputSchema extends z.ZodType,
   TOutputSchema extends z.ZodType,
   TProposedSchema extends z.ZodType<{
@@ -30,6 +49,7 @@ function definePassTool<
 >(config: {
   providerId: TProvider;
   tool: TTool;
+  readOnly: TReadOnly;
   inputSchema: TInputSchema;
   outputSchema: TOutputSchema;
   proposedSchema: TProposedSchema;
@@ -40,6 +60,7 @@ function definePassTool<
     namespacedName,
     providerId: config.providerId,
     tool: config.tool,
+    readOnly: config.readOnly,
     inputSchema: config.inputSchema,
     outputSchema: config.outputSchema,
     proposedSchema: config.proposedSchema,
@@ -58,7 +79,7 @@ function definePassTool<
             namespacedName,
             schemaFingerprint,
             arguments: parsed.data.arguments,
-            readOnly: true as const,
+            readOnly: config.readOnly,
           };
         },
       };
@@ -81,22 +102,61 @@ export const PASS_READ_TOOLS = {
   [namespacedToolName("shop", "search_products")]: definePassTool({
     providerId: "shop",
     tool: "search_products",
+    readOnly: true,
     inputSchema: searchProductsInputSchema,
     outputSchema: searchProductsOutputSchema,
     proposedSchema: proposedProductSearchStepSchema,
     evidence: (data) => `${data.products.length} products for "${data.query}"`,
   }),
+  [namespacedToolName("shop", "open_product")]: definePassTool({
+    providerId: "shop",
+    tool: "open_product",
+    readOnly: true,
+    inputSchema: openProductProposedArgumentsSchema,
+    outputSchema: openProductOutputSchema,
+    proposedSchema: proposedProductOpenStepSchema,
+    evidence: (data) => `Opened ${data.product.name}`,
+  }),
+  [namespacedToolName("shop", "create_product")]: definePassTool({
+    providerId: "shop",
+    tool: "create_product",
+    readOnly: false,
+    inputSchema: createProductInputSchema,
+    outputSchema: createProductOutputSchema,
+    proposedSchema: proposedProductCreateStepSchema,
+    evidence: (data) => `Created ${data.product.name}`,
+  }),
   [namespacedToolName("accounts", "search_customers")]: definePassTool({
     providerId: "accounts",
     tool: "search_customers",
+    readOnly: true,
     inputSchema: searchCustomersInputSchema,
     outputSchema: searchCustomersOutputSchema,
     proposedSchema: proposedCustomerSearchStepSchema,
     evidence: (data) => `${data.customers.length} customers for "${data.query}"`,
   }),
+  [namespacedToolName("accounts", "open_customer")]: definePassTool({
+    providerId: "accounts",
+    tool: "open_customer",
+    readOnly: true,
+    inputSchema: openCustomerProposedArgumentsSchema,
+    outputSchema: openCustomerOutputSchema,
+    proposedSchema: proposedCustomerOpenStepSchema,
+    evidence: (data) => `Opened ${data.customer.name}`,
+  }),
+  [namespacedToolName("accounts", "create_customer")]: definePassTool({
+    providerId: "accounts",
+    tool: "create_customer",
+    readOnly: false,
+    inputSchema: createCustomerInputSchema,
+    outputSchema: createCustomerOutputSchema,
+    proposedSchema: proposedCustomerCreateStepSchema,
+    evidence: (data) => `Created ${data.customer.name}`,
+  }),
   [namespacedToolName("support", "search_cases")]: definePassTool({
     providerId: "support",
     tool: "search_cases",
+    readOnly: true,
     inputSchema: searchCasesProposedArgumentsSchema,
     outputSchema: searchCasesOutputSchema,
     proposedSchema: proposedCaseSearchStepSchema,
@@ -105,6 +165,24 @@ export const PASS_READ_TOOLS = {
         typeof data.query === "string" ? `"${data.query}"` : data.query.displayName;
       return `${data.cases.length} cases for ${label}`;
     },
+  }),
+  [namespacedToolName("support", "open_case")]: definePassTool({
+    providerId: "support",
+    tool: "open_case",
+    readOnly: true,
+    inputSchema: openCaseProposedArgumentsSchema,
+    outputSchema: openCaseOutputSchema,
+    proposedSchema: proposedCaseOpenStepSchema,
+    evidence: (data) => `Opened ${data.case.title}`,
+  }),
+  [namespacedToolName("support", "create_case")]: definePassTool({
+    providerId: "support",
+    tool: "create_case",
+    readOnly: false,
+    inputSchema: createCaseInputSchema,
+    outputSchema: createCaseOutputSchema,
+    proposedSchema: proposedCaseCreateStepSchema,
+    evidence: (data) => `Created ${data.case.title}`,
   }),
 } satisfies Record<PassReadToolName, unknown>;
 
