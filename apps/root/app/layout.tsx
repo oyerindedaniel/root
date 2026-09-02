@@ -21,6 +21,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Root",
   description: "Governed workflows across trusted web apps.",
+  applicationName: "Root",
 };
 
 export default function RootLayout({ children }: PropsWithChildren) {

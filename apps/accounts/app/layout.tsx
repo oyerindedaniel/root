@@ -18,8 +18,9 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Accounts",
+  title: "Customers",
   description: "Customer identity and test-account application.",
+  applicationName: "Customers",
 };
 
 export default function RootLayout({ children }: PropsWithChildren) {

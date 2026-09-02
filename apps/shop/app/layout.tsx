@@ -18,8 +18,9 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Shop",
+  title: "Catalog",
   description: "Storefront and synthetic-order application.",
+  applicationName: "Catalog",
 };
 
 export default function RootLayout({ children }: PropsWithChildren) {
