@@ -10,7 +10,14 @@ import {
   type ComponentProps,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+} from "motion/react";
 import type { MotionValue } from "motion/react";
 
 import {
@@ -79,10 +86,10 @@ function useDockMotion(index: number) {
         itemCount,
       ),
   );
-  const scale = useSpring(raw, { stiffness: 400, damping: 28, mass: 0.35 });
+  const scale = useSpring(raw, { stiffness: 400, damping: 20, mass: 0.35 });
   const offset = useSpring(rawOffset, {
     stiffness: 400,
-    damping: 28,
+    damping: 20,
     mass: 0.35,
   });
   const zIndex = useTransform(scale, (value) => Math.round(value * 20));
@@ -286,9 +293,12 @@ export function DockTrigger({
   style,
   type = "button",
   children,
+  onClick,
   ...props
 }: Omit<ComponentProps<typeof motion.button>, "className">) {
   const { scale } = useDockItem();
+  const reduceMotion = useReducedMotion();
+  const hop = useMotionValue(0);
   return (
     <motion.button
       type={type}
@@ -297,11 +307,24 @@ export function DockTrigger({
         width: "var(--dock-icon-size)",
         height: "var(--dock-icon-size)",
         x: "-50%",
+        y: hop,
         scale,
         transformOrigin: "50% 100%",
         ...style,
       }}
       {...props}
+      onClick={(event) => {
+        if (!reduceMotion) {
+          void animate(hop, 0, {
+            type: "spring",
+            from: -14,
+            stiffness: 640,
+            damping: 14,
+            mass: 0.4,
+          });
+        }
+        onClick?.(event);
+      }}
     >
       {children}
     </motion.button>

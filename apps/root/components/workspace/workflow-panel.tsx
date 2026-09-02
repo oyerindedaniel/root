@@ -10,8 +10,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Tabs } from "@/components/ui/tabs";
 import { ProviderAppsPanel } from "@/components/workspace/provider-apps-panel";
+import { ProviderGuidePanel } from "@/components/workspace/provider-guide-panel";
 import { WorkflowMotionDebug } from "@/components/workspace/workflow-motion-debug";
 import { useProviderLibrary } from "@/lib/providers/provider-library";
+import type { WorkspacePreferences } from "@/lib/storage/workspace-preferences";
 
 export type WorkflowActivityRow = {
   label: string;
@@ -109,12 +111,13 @@ export function WorkflowPanel({ rows }: { rows: WorkflowActivityRow[] }) {
     <Tabs.Root
       value={tab}
       onValueChange={(value, motion) => {
-        if (value === "activity" || value === "apps") {
-          const animate = motion === "animate";
-          setAnimateTransition(animate);
-          skipNextHeightAnimationRef.current = !animate;
-          library.setPanelTab(value);
+        if (!isPanelTab(value)) {
+          return;
         }
+        const animate = motion === "animate";
+        setAnimateTransition(animate);
+        skipNextHeightAnimationRef.current = !animate;
+        library.setPanelTab(value);
       }}
     >
       <Tabs.List>
@@ -131,6 +134,13 @@ export function WorkflowPanel({ rows }: { rows: WorkflowActivityRow[] }) {
           controlsId="workflow-apps-panel"
         >
           Apps
+        </Tabs.Trigger>
+        <Tabs.Trigger
+          value="guide"
+          id="workflow-guide-tab"
+          controlsId="workflow-guide-panel"
+        >
+          Guide
         </Tabs.Trigger>
       </Tabs.List>
       <motion.div
@@ -159,27 +169,45 @@ export function WorkflowPanel({ rows }: { rows: WorkflowActivityRow[] }) {
                 : { duration: 0.16, ease: [0.16, 1, 0.3, 1] }
             }
           >
-            {tab === "activity" ? (
-              <div className="p-2">
-                {rows.map((row) => (
-                  <div
-                    key={row.label}
-                    className="flex h-8 items-center justify-between gap-3 px-2"
-                  >
-                    <span>{row.label}</span>
-                    <span className="min-w-0 truncate text-white/55">
-                      {row.value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <ProviderAppsPanel />
-            )}
+            <PanelBody tab={tab} rows={rows} />
           </motion.div>
         </AnimatePresence>
       </motion.div>
       <WorkflowMotionDebug />
     </Tabs.Root>
+  );
+}
+
+function isPanelTab(
+  value: string,
+): value is WorkspacePreferences["panel"]["tab"] {
+  return value === "activity" || value === "apps" || value === "guide";
+}
+
+function PanelBody({
+  tab,
+  rows,
+}: {
+  tab: WorkspacePreferences["panel"]["tab"];
+  rows: WorkflowActivityRow[];
+}) {
+  if (tab === "apps") {
+    return <ProviderAppsPanel />;
+  }
+  if (tab === "guide") {
+    return <ProviderGuidePanel />;
+  }
+  return (
+    <div className="p-2">
+      {rows.map((row) => (
+        <div
+          key={row.label}
+          className="flex h-8 items-center justify-between gap-3 px-2"
+        >
+          <span>{row.label}</span>
+          <span className="min-w-0 truncate text-white/55">{row.value}</span>
+        </div>
+      ))}
+    </div>
   );
 }

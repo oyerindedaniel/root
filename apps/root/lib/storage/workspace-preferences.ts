@@ -48,7 +48,7 @@ export const dockReferenceSchema = z.strictObject({
 export type DockReference = z.infer<typeof dockReferenceSchema>;
 
 export const workspacePanelSchema = z.strictObject({
-  tab: z.enum(["activity", "apps"]),
+  tab: z.enum(["activity", "apps", "guide"]),
   appsScrollTop: z.number().int().min(0).max(100_000),
 });
 
