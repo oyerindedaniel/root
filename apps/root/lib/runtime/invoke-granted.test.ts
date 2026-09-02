@@ -110,7 +110,7 @@ function setup(options: {
   modelContext?: ModelContext | null;
   executeTool?: () => Promise<string>;
   handle?: RegisteredTool | null;
-  acquireOperation?: () => (() => void) | null;
+  acquireOperation?: InvokeGrantedDependencies["acquireOperation"];
 } = {}) {
   let state = options.state ?? readyState(options.discoveredTool);
   const discover = vi.fn(async () => {
@@ -136,7 +136,8 @@ function setup(options: {
       : (options.modelContext ?? defaultModelContext);
   const releaseOperation = vi.fn();
   const acquireOperation = vi.fn(
-    options.acquireOperation ?? (() => releaseOperation),
+    options.acquireOperation ??
+      (() => ({ instanceId: "custom_1", release: releaseOperation })),
   );
   const getHandle = vi.fn(
     () => options.handle === null ? undefined : (options.handle ?? handle),
@@ -352,7 +353,11 @@ describe("invokeGrantedTool", () => {
       status: "success",
     });
     expect(adoptAbort).toHaveBeenCalledWith("custom_1", expect.any(AbortSignal));
-    expect(current.discover).toHaveBeenCalledWith(provider.id, adopted.signal);
+    expect(current.discover).toHaveBeenCalledWith(
+      provider.id,
+      "custom_1",
+      adopted.signal,
+    );
     expect(executeTool).toHaveBeenCalledWith(
       expect.objectContaining({ signal: adopted.signal }),
     );

@@ -157,6 +157,7 @@ export type RuntimeAction =
       instanceId: string;
       placement: ProviderPlacement;
       settle?: "unmount";
+      instant?: true;
     }
   | { type: "placement/appear"; instanceId: string }
   | { type: "motion/finish"; instanceId: string }

@@ -208,8 +208,11 @@ function createHarness(steps: PreparedWorkflowStep[]) {
     dispatch,
     acquireOperation: (providerId) => {
       events.push(`acquire:${providerId}`);
-      return () => {
-        events.push(`release:${providerId}`);
+      return {
+        instanceId: `${providerId}_instance`,
+        release: () => {
+          events.push(`release:${providerId}`);
+        },
       };
     },
     discover,
@@ -312,7 +315,7 @@ describe("executePass", () => {
   it("cancels when the operation signal aborts", async () => {
     const harness = createHarness([productStep]);
     const controller = new AbortController();
-    harness.dependencies.discover = async (_providerId, signal) => {
+    harness.dependencies.discover = async (_providerId, _instanceId, signal) => {
       controller.abort();
       signal.throwIfAborted();
       return boundedError("discovery_failed", "unreachable");
@@ -328,7 +331,7 @@ describe("executePass", () => {
   it("returns stopped_by_user when the signal aborts for Take control", async () => {
     const harness = createHarness([productStep]);
     const controller = new AbortController();
-    harness.dependencies.discover = async (_providerId, signal) => {
+    harness.dependencies.discover = async (_providerId, _instanceId, signal) => {
       controller.abort(new DOMException("stopped_by_user", "AbortError"));
       signal.throwIfAborted();
       return boundedError("discovery_failed", "unreachable");
@@ -346,7 +349,7 @@ describe("executePass", () => {
   it("returns no_response when the pending-on-human wait times out", async () => {
     const harness = createHarness([productStep]);
     const controller = new AbortController();
-    harness.dependencies.discover = async (_providerId, signal) => {
+    harness.dependencies.discover = async (_providerId, _instanceId, signal) => {
       controller.abort(new DOMException("no_response", "AbortError"));
       signal.throwIfAborted();
       return boundedError("discovery_failed", "unreachable");

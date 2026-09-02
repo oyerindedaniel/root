@@ -95,6 +95,51 @@ function updateStepWindow(
     : state;
 }
 
+function placeWindow(
+  state: RuntimeState,
+  instanceId: string,
+  placement: ProviderWindow["placement"],
+): RuntimeState {
+  return updateWindow(
+    { ...state, motion: { status: "idle" } },
+    instanceId,
+    (windowState) => ({
+      ...windowState,
+      placement,
+      lifecycle: lifecycleAfterPlacement(windowState.lifecycle, placement),
+    }),
+  );
+}
+
+function lifecycleAfterPlacement(
+  lifecycle: ProviderWindow["lifecycle"],
+  placement: ProviderWindow["placement"],
+): ProviderWindow["lifecycle"] {
+  if (
+    placement === "stage" &&
+    (lifecycle === "ready" || lifecycle === "active")
+  ) {
+    return "active";
+  }
+  if (placement === "tray" && lifecycle === "active") {
+    return "ready";
+  }
+  return lifecycle;
+}
+
+function failedWindowLifecycle(windowState: ProviderWindow) {
+  if (windowState.placement === "stage") {
+    return "active";
+  }
+  if (
+    windowState.lifecycle === "mounting" ||
+    windowState.lifecycle === "discovering"
+  ) {
+    return "failed";
+  }
+  return "ready";
+}
+
 function settleLifecycle(windowState: ProviderWindow): ProviderWindow {
   return {
     ...windowState,
@@ -225,6 +270,9 @@ export function runtimeReducer(
       ) {
         return state;
       }
+      if (action.instant) {
+        return placeWindow(state, action.instanceId, action.placement);
+      }
       return {
         ...state,
         motion: {
@@ -263,23 +311,7 @@ export function runtimeReducer(
       if (state.motion.settle === "unmount") {
         return unmountWindow(state, action.instanceId);
       }
-      const placement = state.motion.placement;
-      return updateWindow({
-        ...state,
-        motion: { status: "idle" },
-      }, action.instanceId, (windowState) => ({
-          ...windowState,
-          placement,
-          lifecycle:
-            placement === "stage" &&
-            (windowState.lifecycle === "ready" ||
-              windowState.lifecycle === "active")
-              ? "active"
-              : placement === "tray" &&
-                  windowState.lifecycle === "active"
-                ? "ready"
-                : windowState.lifecycle,
-      }));
+      return placeWindow(state, action.instanceId, state.motion.placement);
     }
     case "motion/cancel":
       return state.motion.status === "suction" &&
@@ -412,12 +444,7 @@ export function runtimeReducer(
         workflow: toFailedWorkflow(state.workflow, action.reason),
       }, (windowState) => ({
           ...windowState,
-          lifecycle: windowState.placement === "stage"
-                ? "active"
-                : windowState.lifecycle === "mounting" ||
-                    windowState.lifecycle === "discovering"
-                  ? "failed"
-                  : "ready",
+          lifecycle: failedWindowLifecycle(windowState),
           outcome: "failed",
           failureReason:
             windowState.lifecycle === "discovering" ||

@@ -224,6 +224,7 @@ export function RuntimeProvider({
         existing.origin === entry.origin &&
         existing.entryUrl === entry.entryUrl
       ) {
+        waitForLoad(existing.instanceId);
         dispatch({
           type: "provider/focus",
           instanceId: existing.instanceId,
@@ -252,7 +253,9 @@ export function RuntimeProvider({
         openedBy,
         touchedAt: Date.now(),
       });
-      dispatch({ type: "placement/appear", instanceId });
+      if (openedBy === "human") {
+        dispatch({ type: "placement/appear", instanceId });
+      }
       return instanceId;
     },
     [catalog, closeProvider, waitForLoad],
@@ -277,19 +280,17 @@ export function RuntimeProvider({
   const runDiscovery = useCallback(
     async (
       providerId: string,
+      instanceId: string,
       signal: AbortSignal,
     ): Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>> => {
-      let instanceId: string | undefined;
       try {
         const entry = getProvider(catalog, providerId);
         const id = providerKey(entry);
-        const openedInstanceId = openProvider(providerId, "agent");
-        instanceId = openedInstanceId;
-        await waitForLoad(openedInstanceId);
+        await waitForLoad(instanceId);
         signal.throwIfAborted();
         dispatch({
           type: "provider/discovering",
-          instanceId: openedInstanceId,
+          instanceId,
         });
 
         const nativeModelContext = document.modelContext;
@@ -297,7 +298,7 @@ export function RuntimeProvider({
           dispatch({ type: "webmcp/unavailable" });
           dispatch({
             type: "provider/failed",
-            instanceId: openedInstanceId,
+            instanceId,
             reason: "webmcp_unavailable",
           });
           return boundedError(
@@ -323,17 +324,17 @@ export function RuntimeProvider({
           rawTools.map((tool) =>
             normalizeDiscoveredTool({
               providerId: id,
-              instanceId: openedInstanceId,
+              instanceId,
               expectedOrigin: entry.origin,
               tool,
               enforceCustomSchemaBounds: entry.source === "custom",
             }),
           ),
         );
-        handlesRef.current.invalidateInstance(openedInstanceId);
+        handlesRef.current.invalidateInstance(instanceId);
         for (const tool of normalized) {
           handlesRef.current.set(
-            openedInstanceId,
+            instanceId,
             tool.descriptor.origin,
             tool.descriptor.name,
             tool.handle,
@@ -341,7 +342,7 @@ export function RuntimeProvider({
         }
         dispatch({
           type: "provider/ready",
-          instanceId: openedInstanceId,
+          instanceId,
           tools: normalized.map((tool) => tool.descriptor),
         });
         const output: DiscoverCapabilitiesOutput = {
@@ -354,13 +355,11 @@ export function RuntimeProvider({
         return boundedSuccess(output);
       } catch (error) {
         if (error instanceof GatewayError) {
-          if (instanceId) {
-            dispatch({
-              type: "provider/failed",
-              instanceId,
-              reason: error.code,
-            });
-          }
+          dispatch({
+            type: "provider/failed",
+            instanceId,
+            reason: error.code,
+          });
           return boundedError(error.code, error.message);
         }
         const abortCode = abortErrorCode(error, signal);
@@ -370,20 +369,18 @@ export function RuntimeProvider({
             abortErrorMessage(abortCode, "Capability discovery"),
           );
         }
-        if (instanceId) {
-          dispatch({
-            type: "provider/failed",
-            instanceId,
-            reason: "discovery_failed",
-          });
-        }
+        dispatch({
+          type: "provider/failed",
+          instanceId,
+          reason: "discovery_failed",
+        });
         return boundedError(
           "discovery_failed",
           "Capability discovery failed.",
         );
       }
     },
-    [catalog, openProvider, waitForLoad],
+    [catalog, waitForLoad],
   );
 
   const holdWindowLease = useCallback((instanceId: string) => {
@@ -485,7 +482,7 @@ export function RuntimeProvider({
           instanceId,
           signal,
         );
-        return await runDiscovery(input.providerId, operationSignal);
+        return await runDiscovery(input.providerId, instanceId, operationSignal);
       } finally {
         dropInstanceAbort(instanceAbortsRef.current, instanceId);
         releaseOperation();
@@ -516,16 +513,19 @@ export function RuntimeProvider({
             if (!releaseLease) {
               return null;
             }
-            return () => {
-              dropInstanceAbort(instanceAbortsRef.current, instanceId);
-              releaseLease();
+            return {
+              instanceId,
+              release: () => {
+                dropInstanceAbort(instanceAbortsRef.current, instanceId);
+                releaseLease();
+              },
             };
           },
           adoptAbort: (instanceId, parent) =>
             adoptInstanceAbort(instanceAbortsRef.current, instanceId, parent),
           getState: () => stateRef.current,
-          discover: (providerId, operationSignal) =>
-            runDiscovery(providerId, operationSignal),
+          discover: (providerId, instanceId, operationSignal) =>
+            runDiscovery(providerId, instanceId, operationSignal),
           getHandle: (instanceId, origin, toolName) =>
             handlesRef.current.get(instanceId, origin, toolName),
           getModelContext: () => document.modelContext,
@@ -599,14 +599,17 @@ export function RuntimeProvider({
               instanceSignal.addEventListener("abort", onInstanceAbort, {
                 once: true,
               });
-              return () => {
-                instanceSignal.removeEventListener("abort", onInstanceAbort);
-                dropInstanceAbort(instanceAbortsRef.current, instanceId);
-                releaseLease();
+              return {
+                instanceId,
+                release: () => {
+                  instanceSignal.removeEventListener("abort", onInstanceAbort);
+                  dropInstanceAbort(instanceAbortsRef.current, instanceId);
+                  releaseLease();
+                },
               };
             },
-            discover: (providerId, operationSignal) =>
-              runDiscovery(providerId, operationSignal),
+            discover: (providerId, instanceId, operationSignal) =>
+              runDiscovery(providerId, instanceId, operationSignal),
             getHandle: (instanceId, origin, toolName) =>
               handlesRef.current.get(instanceId, origin, toolName),
             getModelContext: () => document.modelContext,
@@ -729,8 +732,15 @@ export function RuntimeProvider({
       instanceId: string,
       placement: ProviderPlacement,
       settle?: "unmount",
+      instant?: true,
     ) => {
-      dispatch({ type: "placement/request", instanceId, placement, settle });
+      dispatch({
+        type: "placement/request",
+        instanceId,
+        placement,
+        settle,
+        ...(instant ? { instant: true } : {}),
+      });
     },
     [],
   );
@@ -758,14 +768,13 @@ export function RuntimeProvider({
       if (windowState.placement === "tray") {
         return false;
       }
-      requestPlacement(windowState.instanceId, "tray");
-      if (windowSessionsRef.current.get(windowState.instanceId)?.isMaximized()) {
-        commitPlacement(windowState.instanceId);
-        return false;
+      if (stateRef.current.motion.status === "suction") {
+        return true;
       }
-      return true;
+      requestPlacement(windowState.instanceId, "tray", undefined, true);
+      return false;
     },
-    [commitPlacement, requestPlacement],
+    [requestPlacement],
   );
   const cancelPlacement = useCallback((instanceId: string) => {
     dispatch({ type: "motion/cancel", instanceId });
@@ -829,7 +838,7 @@ export function RuntimeProvider({
       if (!session?.isMaximized()) {
         if (resolved.placement === "tray") {
           pendingFillRef.current.add(resolved.instanceId);
-          requestPlacement(resolved.instanceId, "stage");
+          requestPlacement(resolved.instanceId, "stage", undefined, true);
         } else {
           session?.fillWorkArea();
         }
@@ -851,14 +860,10 @@ export function RuntimeProvider({
       if ("status" in resolved) {
         return resolved;
       }
-      if (windowSessionsRef.current.get(resolved.instanceId)?.isMaximized()) {
-        closeProvider(resolved.instanceId);
-      } else {
-        requestPlacement(resolved.instanceId, "tray", "unmount");
-      }
+      closeProvider(resolved.instanceId);
       return boundedSuccess({ providerId: resolved.providerId });
     },
-    [catalog, closeProvider, requestPlacement],
+    [catalog, closeProvider],
   );
 
   const api = useMemo<RuntimeApi>(

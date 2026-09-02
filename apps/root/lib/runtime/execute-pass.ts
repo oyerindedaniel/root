@@ -27,17 +27,22 @@ import {
 import { parsePassToolResult } from "./pass-tools";
 import { revalidatePreparedStep } from "./prepare";
 import {
-  findProviderWindow,
   type RuntimeAction,
   type RuntimeState,
 } from "./state";
 
+export type WindowOperation = {
+  instanceId: string;
+  release: () => void;
+};
+
 export type ExecutePassDependencies = {
   getState: () => RuntimeState;
   dispatch: (action: RuntimeAction) => void;
-  acquireOperation: (providerId: string) => (() => void) | null;
+  acquireOperation: (providerId: string) => WindowOperation | null;
   discover: (
     providerId: string,
+    instanceId: string,
     signal: AbortSignal,
   ) => Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>>;
   getHandle: (
@@ -90,8 +95,8 @@ export async function executePass(options: {
           "Workflow execution failed.",
         );
       }
-      const releaseOperation = dependencies.acquireOperation(step.providerId);
-      if (!releaseOperation) {
+      const operation = dependencies.acquireOperation(step.providerId);
+      if (!operation) {
         dependencies.dispatch({
           type: "workflow/failed",
           workflowId: input.workflowId,
@@ -108,7 +113,11 @@ export async function executePass(options: {
           workflowId: input.workflowId,
           index,
         });
-        const discovered = await dependencies.discover(step.providerId, signal);
+        const discovered = await dependencies.discover(
+          step.providerId,
+          operation.instanceId,
+          signal,
+        );
         if (discovered.status === "error") {
           if (
             discovered.code === STOPPED_BY_USER ||
@@ -137,7 +146,7 @@ export async function executePass(options: {
           dependencies.dispatch({ type: "workflow/invalidate" });
           return revalidated.error;
         }
-        const windowState = findProviderWindow(live, step.providerId);
+        const windowState = live.windows[operation.instanceId];
         if (!windowState) {
           dependencies.dispatch({ type: "workflow/invalidate" });
           return boundedError(
@@ -201,7 +210,7 @@ export async function executePass(options: {
         results.push(parsed.result);
         evidenceParts.push(parsed.evidence);
       } finally {
-        releaseOperation();
+        operation.release();
       }
     }
 

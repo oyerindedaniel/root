@@ -18,15 +18,21 @@ import { executeRegisteredTool } from "@/lib/webmcp/execute";
 import { validateJsonSchemaInput } from "@/lib/webmcp/json-schema-validator";
 
 import { abortErrorCode, abortErrorMessage } from "./cancellation";
-import { findProviderWindow, type RuntimeState } from "./state";
+import { type RuntimeState } from "./state";
+
+export type WindowOperation = {
+  instanceId: string;
+  release: () => void;
+};
 
 export type InvokeGrantedDependencies = {
   catalog: ProviderCatalog;
-  acquireOperation: () => (() => void) | null;
+  acquireOperation: () => WindowOperation | null;
   adoptAbort?: (instanceId: string, parent: AbortSignal) => AbortSignal;
   getState: () => RuntimeState;
   discover: (
     providerId: string,
+    instanceId: string,
     signal: AbortSignal,
   ) => Promise<BoundedResultEnvelope<DiscoverCapabilitiesOutput>>;
   getHandle: (
@@ -71,8 +77,8 @@ export async function invokeGrantedTool(options: {
       "This tool has not been granted by the user.",
     );
   }
-  const releaseOperation = dependencies.acquireOperation();
-  if (!releaseOperation) {
+  const operation = dependencies.acquireOperation();
+  if (!operation) {
     return boundedError(
       "operation_in_progress",
       "Another provider operation is already in progress.",
@@ -81,12 +87,12 @@ export async function invokeGrantedTool(options: {
 
   let operationSignal = signal;
   try {
-    const opened = findProviderWindow(dependencies.getState(), input.providerId);
-    if (opened && dependencies.adoptAbort) {
-      operationSignal = dependencies.adoptAbort(opened.instanceId, signal);
+    if (dependencies.adoptAbort) {
+      operationSignal = dependencies.adoptAbort(operation.instanceId, signal);
     }
     const discovered = await dependencies.discover(
       input.providerId,
+      operation.instanceId,
       operationSignal,
     );
     if (discovered.status === "error") {
@@ -94,7 +100,7 @@ export async function invokeGrantedTool(options: {
     }
     operationSignal.throwIfAborted();
     const state = dependencies.getState();
-    const windowState = findProviderWindow(state, provider.id);
+    const windowState = state.windows[operation.instanceId];
     if (
       !windowState ||
       windowState.origin !== provider.origin ||
@@ -174,6 +180,6 @@ export async function invokeGrantedTool(options: {
     }
     return boundedError("execution_failed", "Tool invocation failed.");
   } finally {
-    releaseOperation();
+    operation.release();
   }
 }

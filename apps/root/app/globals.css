@@ -25,7 +25,7 @@
 }
 
 @utility take-control-ring {
-  animation: take-control-ring-spin 4s linear infinite;
+  animation: take-control-ring-spin 2s linear infinite;
   will-change: transform;
 }
 

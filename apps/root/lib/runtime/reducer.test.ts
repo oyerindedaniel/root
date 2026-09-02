@@ -289,6 +289,62 @@ describe("runtimeReducer", () => {
     expect(state.motion).toEqual({ status: "idle" });
   });
 
+  it("places onto the tray instantly without suction", () => {
+    let state = runtimeReducer(mounted(), {
+      type: "provider/ready",
+      instanceId: "shop_1",
+      tools: [],
+    });
+    state = runtimeReducer(state, {
+      type: "placement/request",
+      instanceId: "shop_1",
+      placement: "tray",
+      instant: true,
+    });
+    expect(windowState(state).placement).toBe("tray");
+    expect(windowState(state).lifecycle).toBe("ready");
+    expect(state.motion).toEqual({ status: "idle" });
+  });
+
+  it("does not steal a pour already in flight", () => {
+    let state = runtimeReducer(mounted(), {
+      type: "placement/request",
+      instanceId: "shop_1",
+      placement: "tray",
+    });
+    const pending = state;
+    state = runtimeReducer(state, {
+      type: "placement/request",
+      instanceId: "shop_1",
+      placement: "stage",
+      instant: true,
+    });
+    expect(state).toBe(pending);
+  });
+
+  it("restores onto the stage instantly without suction", () => {
+    let state = runtimeReducer(mounted(), {
+      type: "provider/ready",
+      instanceId: "shop_1",
+      tools: [],
+    });
+    state = runtimeReducer(state, {
+      type: "placement/request",
+      instanceId: "shop_1",
+      placement: "tray",
+      instant: true,
+    });
+    state = runtimeReducer(state, {
+      type: "placement/request",
+      instanceId: "shop_1",
+      placement: "stage",
+      instant: true,
+    });
+    expect(windowState(state).placement).toBe("stage");
+    expect(windowState(state).lifecycle).toBe("active");
+    expect(state.motion).toEqual({ status: "idle" });
+  });
+
   it("restores the requested tray window to the stage", () => {
     let state = runtimeReducer(mounted(), {
       type: "provider/ready",
