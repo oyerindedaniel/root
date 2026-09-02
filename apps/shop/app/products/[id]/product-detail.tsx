@@ -10,7 +10,7 @@ import { Button } from "@repo/ui/button";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useState } from "react";
 
-import { useWorkspace } from "../../workspace-shell";
+import { useWorkspace } from "@/app/workspace-shell";
 
 type LoadStatus = "pending" | "success" | "error";
 

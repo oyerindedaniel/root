@@ -12,7 +12,7 @@ import { Label } from "@repo/ui/label";
 import { useRouter } from "next/navigation";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
-import { useWorkspace } from "../../workspace-shell";
+import { useWorkspace } from "@/app/workspace-shell";
 
 type FormStatus = "idle" | "pending" | "success" | "error";
 

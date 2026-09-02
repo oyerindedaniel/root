@@ -16,7 +16,7 @@ import { SearchHit } from "@repo/ui/search-hit";
 import { useRouter } from "next/navigation";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
-import { useWorkspace } from "./workspace-shell";
+import { useWorkspace } from "@/app/workspace-shell";
 
 type SearchStatus = "idle" | "pending" | "success" | "error";
 

@@ -3,7 +3,7 @@ import type { PropsWithChildren } from "react";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import { TrpcReactProvider } from "@repo/api-client";
-import { WorkspaceShell } from "./workspace-shell";
+import { WorkspaceShell } from "@/app/workspace-shell";
 import "./globals.css";
 
 const inter = Inter({
