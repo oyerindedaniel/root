@@ -1,9 +1,13 @@
-import { requireAccount } from "@/lib/auth/account";
+import { RootHome } from "@/components/home/root-home";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
+import { getAccount } from "@/lib/auth/account";
 import { loadProviderDirectory } from "@/lib/providers/directory";
 
 export default async function WorkspacePage() {
-  const account = await requireAccount();
+  const account = await getAccount();
+  if (!account) {
+    return <RootHome />;
+  }
   const directory = loadProviderDirectory({
     NEXT_PUBLIC_ROOT_ORIGIN: process.env.NEXT_PUBLIC_ROOT_ORIGIN,
     NEXT_PUBLIC_SHOP_ORIGIN: process.env.NEXT_PUBLIC_SHOP_ORIGIN,

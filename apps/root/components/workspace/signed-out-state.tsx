@@ -20,7 +20,14 @@ export function SignedOutState() {
       className="absolute inset-0 z-[2147483647] flex items-center justify-center bg-background/90 p-6"
     >
       <div className="max-w-md rounded-lg border border-border bg-background p-6">
-        <h2 id="session-ended-title" className="text-3xl font-medium">
+        <img
+          src="/icons/root-icon.webp"
+          alt=""
+          width={64}
+          height={64}
+          className="size-16"
+        />
+        <h2 id="session-ended-title" className="mt-3 text-3xl font-medium">
           Session ended
         </h2>
         <p className="mt-3 text-base text-muted-foreground">
