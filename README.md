@@ -4,7 +4,25 @@
 
 # Root
 
-A desktop where a person and an agent share the same live apps. Each app is a real site in its own window. The agent uses WebMCP tools that site registers. The person can take the window back at any time.
+Built for the [WebMCP Challenge](https://openai.com/webmcp-challenge/).
+
+<p>
+  <img src="apps/root/public/sponsors/openai.svg" height="20" alt="OpenAI" />
+  &nbsp;&nbsp;
+  <img src="apps/root/public/sponsors/cloudflare.svg" height="20" alt="Cloudflare" />
+  &nbsp;&nbsp;
+  <img src="apps/root/public/sponsors/vercel.svg" height="20" alt="Vercel" />
+  &nbsp;&nbsp;
+  <img src="apps/root/public/sponsors/render.svg" height="20" alt="Render" />
+  &nbsp;&nbsp;
+  <img src="apps/root/public/sponsors/netlify.svg" height="20" alt="Netlify" />
+  &nbsp;&nbsp;
+  <img src="apps/root/public/sponsors/shopify.svg" height="20" alt="Shopify" />
+  &nbsp;&nbsp;
+  <img src="apps/root/public/sponsors/googlechrome.svg" height="20" alt="Google Chrome" />
+</p>
+
+A workspace where a person and an agent share the same live apps. Each app is a real site in its own window. The agent uses WebMCP tools that site registers. The person can take the window back at any time.
 
 ## Providers
 
@@ -18,7 +36,7 @@ Root loads each provider in an iframe (`allow="tools"`) and talks only to tools 
 
 <img src="apps/lab/public/icons/lab-icon.webp" width="32" height="32" align="absmiddle" alt="Lab" /> <strong>Lab</strong> — add in Apps, Test, then grant tools. Not on prepare.
 
-A person and an agent can run a pass across Catalog, Customers, and Cases on the live windows: search, open a record, fill a create form. Writes wait for the person to click on stage. A site that is not builtin can still join after a human grant (`invoke_granted_tool`). Take control stops the agent on that window.
+A person and an agent can run a pass across Catalog, Customers, and Cases on the live windows: search, open a record, fill a create form. Writes, search picks, and a field the person takes over wait for them on stage. A site that is not builtin can still join after a human grant (`invoke_granted_tool`). Take control stops the agent on that window.
 
 ## WebMCP
 

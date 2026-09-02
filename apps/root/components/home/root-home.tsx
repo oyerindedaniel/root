@@ -25,10 +25,11 @@ export function RootHome() {
         </div>
         <div className="flex shrink-0 flex-col items-center gap-3 text-center">
           <p className="text-base text-muted-foreground">
-            A desktop where a person and an agent share the same live apps.
+            A workspace where a person and an agent share the same live apps.
             Catalog, Customers, and Cases stay on stage as real sites. The
-            agent uses only the tools those pages expose. Writes wait for you.
-            Take control stops the agent.
+            agent uses only the tools those pages expose. Writes, search picks,
+            and a field you take over wait for you. Take control stops the
+            agent.
           </p>
           <span>
             <Link href="/sign-in" className={buttonVariants()}>

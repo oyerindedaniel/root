@@ -34,7 +34,7 @@ export default function NotFound() {
               router.refresh();
             }}
           >
-            Desktop
+            Workspace
           </Button>
         </div>
       </div>

@@ -102,7 +102,7 @@ export function DesktopIcons() {
     <aside
       dir="rtl"
       className="absolute top-5 right-5 bottom-28 z-10 grid auto-cols-[4.75rem] grid-flow-col grid-rows-[repeat(auto-fill,6.5rem)] items-start justify-items-center gap-5"
-      aria-label="Desktop"
+      aria-label="Workspace"
       data-caliper-id="root-desktop-icons"
       onDragOver={(event) => {
         if (event.dataTransfer.types.includes(ROOT_APP_DRAG_TYPE)) {
