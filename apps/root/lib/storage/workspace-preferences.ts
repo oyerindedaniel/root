@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { MAX_PROVIDER_TOOLS, webmcpToolNameSchema } from "@repo/contracts";
+import {
+  DEFAULT_PRESENT_PACE,
+  MAX_PROVIDER_TOOLS,
+  presentPaceSchema,
+  webmcpToolNameSchema,
+} from "@repo/contracts";
 
 export const MAX_CUSTOM_PROVIDERS = 24;
 export const MAX_DOCK_APPS = 32;
@@ -48,7 +53,7 @@ export const dockReferenceSchema = z.strictObject({
 export type DockReference = z.infer<typeof dockReferenceSchema>;
 
 export const workspacePanelSchema = z.strictObject({
-  tab: z.enum(["activity", "apps", "guide"]),
+  tab: z.enum(["activity", "apps", "guide", "settings"]),
   appsScrollTop: z.number().int().min(0).max(100_000),
 });
 
@@ -65,6 +70,7 @@ export const workspacePreferencesSchema = z
     customProviders: z.array(customProviderSchema).max(MAX_CUSTOM_PROVIDERS),
     dock: z.array(dockReferenceSchema).max(MAX_DOCK_APPS),
     panel: workspacePanelSchema.default(DEFAULT_WORKSPACE_PANEL),
+    present: presentPaceSchema.default(DEFAULT_PRESENT_PACE),
   })
   .superRefine((preferences, context) => {
     const providerIds = new Set<string>();
@@ -106,5 +112,6 @@ export function createDefaultWorkspacePreferences(): WorkspacePreferences {
     customProviders: [],
     dock: DEFAULT_DOCK.map((reference) => ({ ...reference })),
     panel: { ...DEFAULT_WORKSPACE_PANEL },
+    present: { ...DEFAULT_PRESENT_PACE },
   };
 }

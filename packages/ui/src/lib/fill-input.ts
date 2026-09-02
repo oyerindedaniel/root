@@ -1,16 +1,45 @@
+import type { PresentPaceName } from "@repo/contracts";
+
 export const TOOL_PRESENT_FILL_MS = 32;
 export const TOOL_PRESENT_FILL_REF_CHARS = 8;
 export const TOOL_PRESENT_FILL_MIN_MS = 8;
 export const TOOL_PRESENT_PREVIEW_MS = 400;
 
-export function fillPaceMs(length: number) {
+const FILL_PACE_MS = {
+  slow: 64,
+  default: TOOL_PRESENT_FILL_MS,
+  fast: 16,
+} as const;
+
+const FILL_PACE_MIN_MS = {
+  slow: 16,
+  default: TOOL_PRESENT_FILL_MIN_MS,
+  fast: TOOL_PRESENT_FILL_MIN_MS,
+} as const;
+
+const PREVIEW_HOLD_MS = {
+  slow: 800,
+  default: TOOL_PRESENT_PREVIEW_MS,
+  fast: 200,
+} as const;
+
+export function fillPaceMs(
+  length: number,
+  pace: PresentPaceName = "default",
+) {
+  const ms = FILL_PACE_MS[pace];
+  const min = FILL_PACE_MIN_MS[pace];
   if (length <= TOOL_PRESENT_FILL_REF_CHARS) {
-    return TOOL_PRESENT_FILL_MS;
+    return ms;
   }
   return Math.max(
-    TOOL_PRESENT_FILL_MIN_MS,
-    Math.round((TOOL_PRESENT_FILL_MS * TOOL_PRESENT_FILL_REF_CHARS) / length),
+    min,
+    Math.round((ms * TOOL_PRESENT_FILL_REF_CHARS) / length),
   );
+}
+
+export function previewHoldMs(pace: PresentPaceName = "default") {
+  return PREVIEW_HOLD_MS[pace];
 }
 
 export type FillInputNode = Pick<HTMLInputElement, "dispatchEvent"> &

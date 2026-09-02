@@ -8,6 +8,7 @@ import {
   parseCoeditMessage,
   parsePendingHumanMessage,
   PENDING_HUMAN_TIMEOUT_MS,
+  presentPaceMessage,
   type Account,
   type BoundedError,
   type BoundedResultEnvelope,
@@ -24,6 +25,7 @@ import {
   type ListProvidersOutput,
   type PrepareWorkflowInput,
   type PrepareWorkflowOutput,
+  type PresentPace,
   type ProviderId,
   type ProviderPlacement,
   type WindowChromeInput,
@@ -119,10 +121,11 @@ type TrayTarget = {
   restoreButton: HTMLButtonElement | null;
 };
 
-function postDocumentVisibility(
+function postDocumentHostState(
   frame: HTMLIFrameElement | null,
   origin: string,
   placement: ProviderPlacement,
+  presentPace: PresentPace,
 ) {
   const contentWindow = frame?.contentWindow;
   if (!contentWindow) {
@@ -132,6 +135,7 @@ function postDocumentVisibility(
     documentVisibilityMessage(placement === "stage"),
     origin,
   );
+  contentWindow.postMessage(presentPaceMessage(presentPace), origin);
 }
 
 export function RuntimeProvider({
@@ -142,7 +146,7 @@ export function RuntimeProvider({
   account: Account;
   directory: ProviderDirectory;
 }>) {
-  const { catalog } = useProviderLibrary();
+  const { catalog, preferences } = useProviderLibrary();
   const [state, reactDispatch] = useReducer(
     runtimeReducer,
     account,
@@ -939,6 +943,7 @@ export function RuntimeProvider({
                 onSessionBind={bindWindowSession}
                 onSessionUnbind={unbindWindowSession}
                 onTakePendingFill={takePendingFill}
+                presentPace={preferences.present}
               />
             ) : null;
           })}
@@ -983,6 +988,7 @@ function ProviderWindowHost({
   onSessionBind,
   onSessionUnbind,
   onTakePendingFill,
+  presentPace,
 }: {
   windowState: ProviderWindow;
   catalog: ProviderCatalog;
@@ -1006,6 +1012,7 @@ function ProviderWindowHost({
   onSessionBind: (instanceId: string, session: WindowSession) => void;
   onSessionUnbind: (instanceId: string) => void;
   onTakePendingFill: (instanceId: string) => boolean;
+  presentPace: PresentPace;
 }) {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -1210,12 +1217,13 @@ function ProviderWindowHost({
   useEffect(() => () => windowSession.unbind(), [windowSession]);
 
   useEffect(() => {
-    postDocumentVisibility(
+    postDocumentHostState(
       iframeRef.current,
       windowState.origin,
       windowState.placement,
+      presentPace,
     );
-  }, [windowState.origin, windowState.placement]);
+  }, [presentPace, windowState.origin, windowState.placement]);
 
   useEffect(() => {
     if (windowState.control !== "agent") {
@@ -1293,10 +1301,11 @@ function ProviderWindowHost({
         onLoad={() => {
           setCoeditOpen(false);
           onHumanPending(windowState.instanceId, false);
-          postDocumentVisibility(
+          postDocumentHostState(
             iframeRef.current,
             windowState.origin,
             windowState.placement,
+            presentPace,
           );
           onLoad(windowState.instanceId);
         }}

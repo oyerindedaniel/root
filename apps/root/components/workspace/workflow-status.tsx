@@ -15,7 +15,10 @@ import { workflowQueryLabel, type PreparedWorkflowStep } from "@repo/contracts";
 import { cn } from "@repo/ui/lib/cn";
 import { OscillatingDots } from "@repo/ui/oscillating-dots";
 
-import { WorkflowPanel } from "@/components/workspace/workflow-panel";
+import {
+  WorkflowPanel,
+  type WorkflowActivityRow,
+} from "@/components/workspace/workflow-panel";
 import {
   providerKey,
   type ProviderCatalog,
@@ -383,7 +386,7 @@ export function WorkflowStatus() {
                   : "top left",
             }}
             className={cn(
-              "absolute w-96 overflow-hidden rounded-2xl bg-black/90 text-sm text-white shadow-[0_12px_40px_rgb(0_0_0_/_0.4)] ring-1 ring-white/12",
+              "absolute w-96 overflow-hidden rounded-2xl bg-black text-sm text-white shadow-[0_12px_40px_rgb(0_0_0_/_0.4)] ring-1 ring-white/12",
               bottom ? "bottom-[calc(100%+0.5rem)]" : "top-[calc(100%+0.5rem)]",
               right ? "right-0" : "left-0",
             )}
@@ -464,7 +467,7 @@ function inspectRows(
       return waitingProvider ? [waitingProvider.label] : [];
     },
   );
-  const rows: { label: string; value: string }[] = [
+  const rows: WorkflowActivityRow[] = [
     { label: "Provider", value: provider?.label ?? "None" },
     ...(waiting.length
       ? [{ label: "Waiting", value: waiting.join(", ") }]
@@ -488,12 +491,17 @@ function inspectRows(
     rows.push({ label: "Query", value: query });
   }
   if (state.workflow.evidence) {
-    rows.push({ label: "Result", value: state.workflow.evidence });
+    rows.push({
+      label: "Result",
+      value: state.workflow.evidence,
+      wrap: true,
+      copy: true,
+    });
   }
   const issue =
     state.workflow.failureReason ?? providerWindow?.failureReason;
   if (issue) {
-    rows.push({ label: "Issue", value: issue });
+    rows.push({ label: "Issue", value: issue, wrap: true });
   }
   return rows;
 }

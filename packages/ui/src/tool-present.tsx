@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { coeditMessage, pendingHumanMessage } from "@repo/contracts";
+import {
+  coeditMessage,
+  DEFAULT_PRESENT_PACE,
+  pendingHumanMessage,
+  parsePresentPaceMessage,
+  type PresentPace,
+} from "@repo/contracts";
 
 import {
+  fillPaceMs,
   fillPresentedInput,
-  TOOL_PRESENT_PREVIEW_MS,
+  previewHoldMs,
   waitPresent,
   waitForChoice,
   type FillPresentResult,
@@ -41,6 +48,7 @@ export function useToolPresent(options: {
   const chooseRef = useRef<(id: string) => void>(undefined);
   const pendingPostedRef = useRef(false);
   const firstHitRef = useRef<HTMLLIElement | null>(null);
+  const presentPaceRef = useRef<PresentPace>(DEFAULT_PRESENT_PACE);
   const [hitId, setHitId] = useState<string | null>(null);
   const [intent, setIntent] = useState(false);
   const [choosing, setChoosing] = useState(false);
@@ -52,6 +60,14 @@ export function useToolPresent(options: {
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       gateRef.current.applyMessage(event.data, event.origin, rootOrigin);
+      const pace = parsePresentPaceMessage(
+        event.data,
+        event.origin,
+        rootOrigin,
+      );
+      if (pace) {
+        presentPaceRef.current = pace;
+      }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -234,6 +250,7 @@ export function useToolPresent(options: {
         input: options.input,
         signal: options.signal,
         instant,
+        paceMs: fillPaceMs(options.text.length, presentPaceRef.current.fill),
       });
     },
     [],
@@ -248,7 +265,10 @@ export function useToolPresent(options: {
     }
     setIntent(true);
     try {
-      await waitPresent(TOOL_PRESENT_PREVIEW_MS, options?.signal);
+      await waitPresent(
+        previewHoldMs(presentPaceRef.current.preview),
+        options?.signal,
+      );
     } finally {
       setIntent(false);
     }

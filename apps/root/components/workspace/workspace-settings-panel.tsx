@@ -1,0 +1,81 @@
+"use client";
+
+import type { PresentPaceName } from "@repo/contracts";
+import { cn } from "@repo/ui/lib/cn";
+
+import { useProviderLibrary } from "@/lib/providers/provider-library";
+
+const PACE_NAMES = ["slow", "default", "fast"] as const;
+
+function paceLabel(name: PresentPaceName) {
+  if (name === "slow") {
+    return "Slow";
+  }
+  if (name === "fast") {
+    return "Fast";
+  }
+  return "Default";
+}
+
+export function WorkspaceSettingsPanel() {
+  const library = useProviderLibrary();
+  const present = library.preferences.present;
+  return (
+    <div className="flex flex-col gap-3 p-3">
+      <PaceRow
+        label="Typing"
+        hint="How fast the agent types in a field."
+        value={present.fill}
+        onChange={(fill) => library.setPresentPace({ fill })}
+      />
+      <PaceRow
+        label="Before it clicks"
+        hint="How long Search is held before it fires."
+        value={present.preview}
+        onChange={(preview) => library.setPresentPace({ preview })}
+      />
+    </div>
+  );
+}
+
+function PaceRow({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: PresentPaceName;
+  onChange: (name: PresentPaceName) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm">{label}</p>
+        <p className="text-xs text-white/45">{hint}</p>
+      </div>
+      <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-full bg-white/6 p-0.5">
+        {PACE_NAMES.map((name) => {
+          const selected = name === value;
+          return (
+            <button
+              key={name}
+              type="button"
+              aria-pressed={selected}
+              className={cn(
+                "h-7 rounded-full px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-white/60",
+                selected
+                  ? "bg-white/15 text-white"
+                  : "text-white/60 hover:bg-white/10 hover:text-white",
+              )}
+              onClick={() => onChange(name)}
+            >
+              {paceLabel(name)}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import {
   AnimatePresence,
   animate,
@@ -12,12 +13,15 @@ import { Tabs } from "@/components/ui/tabs";
 import { ProviderAppsPanel } from "@/components/workspace/provider-apps-panel";
 import { ProviderGuidePanel } from "@/components/workspace/provider-guide-panel";
 import { WorkflowMotionDebug } from "@/components/workspace/workflow-motion-debug";
+import { WorkspaceSettingsPanel } from "@/components/workspace/workspace-settings-panel";
 import { useProviderLibrary } from "@/lib/providers/provider-library";
 import type { WorkspacePreferences } from "@/lib/storage/workspace-preferences";
 
 export type WorkflowActivityRow = {
   label: string;
   value: string;
+  wrap?: boolean;
+  copy?: boolean;
 };
 
 export function WorkflowPanel({ rows }: { rows: WorkflowActivityRow[] }) {
@@ -142,6 +146,13 @@ export function WorkflowPanel({ rows }: { rows: WorkflowActivityRow[] }) {
         >
           Guide
         </Tabs.Trigger>
+        <Tabs.Trigger
+          value="settings"
+          id="workflow-settings-tab"
+          controlsId="workflow-settings-panel"
+        >
+          Settings
+        </Tabs.Trigger>
       </Tabs.List>
       <motion.div
         ref={viewportRef}
@@ -181,7 +192,12 @@ export function WorkflowPanel({ rows }: { rows: WorkflowActivityRow[] }) {
 function isPanelTab(
   value: string,
 ): value is WorkspacePreferences["panel"]["tab"] {
-  return value === "activity" || value === "apps" || value === "guide";
+  return (
+    value === "activity" ||
+    value === "apps" ||
+    value === "guide" ||
+    value === "settings"
+  );
 }
 
 function PanelBody({
@@ -197,17 +213,67 @@ function PanelBody({
   if (tab === "guide") {
     return <ProviderGuidePanel />;
   }
+  if (tab === "settings") {
+    return <WorkspaceSettingsPanel />;
+  }
   return (
     <div className="p-2">
       {rows.map((row) => (
-        <div
-          key={row.label}
-          className="flex h-8 items-center justify-between gap-3 px-2"
-        >
-          <span>{row.label}</span>
-          <span className="min-w-0 truncate text-white/55">{row.value}</span>
-        </div>
+        <ActivityRow key={row.label} row={row} />
       ))}
+    </div>
+  );
+}
+
+function ActivityRow({ row }: { row: WorkflowActivityRow }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setCopied(false);
+    }, 1500);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
+  return (
+    <div
+      className={
+        row.wrap
+          ? "flex items-start justify-between gap-3 px-2 py-1.5"
+          : "flex h-8 items-center justify-between gap-3 px-2"
+      }
+    >
+      <span className="shrink-0">{row.label}</span>
+      <span className="flex min-w-0 items-start gap-1">
+        <span
+          className={
+            row.wrap
+              ? "min-w-0 text-right text-white/55"
+              : "min-w-0 truncate text-white/55"
+          }
+        >
+          {row.value}
+        </span>
+        {row.copy ? (
+          <button
+            type="button"
+            aria-label={copied ? "Copied" : `Copy ${row.label}`}
+            className="flex size-8 shrink-0 items-center justify-center rounded-full text-white/55 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+            onClick={() => {
+              void navigator.clipboard.writeText(row.value).then(() => {
+                setCopied(true);
+              });
+            }}
+          >
+            {copied ? (
+              <CheckIcon className="size-4" />
+            ) : (
+              <ClipboardDocumentIcon className="size-4" />
+            )}
+          </button>
+        ) : null}
+      </span>
     </div>
   );
 }

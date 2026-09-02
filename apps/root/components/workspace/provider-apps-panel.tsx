@@ -29,9 +29,9 @@ import type { NormalizedToolDescriptor } from "@repo/contracts";
 
 import { Button } from "@repo/ui/button";
 import { Badge } from "@repo/ui/badge";
-import { Checkbox } from "@repo/ui/checkbox";
 import { Input } from "@repo/ui/input";
 import { Label } from "@repo/ui/label";
+import { Switch } from "@repo/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -313,16 +313,35 @@ export function ProviderAppsPanel() {
                       const confirming =
                         confirmWriteGrant === confirmationKey;
                       const badge = grantBadgeForRow(row);
+                      const description =
+                        row.descriptor &&
+                        row.descriptor.description !== row.descriptor.name
+                          ? row.descriptor.description
+                          : null;
                       return (
                         <div key={row.name}>
-                          <label className="flex min-h-8 items-center gap-2 rounded-lg px-2 text-xs text-white/75 hover:bg-white/6">
-                            <Checkbox
+                          <label className="flex min-h-8 items-start gap-2 rounded-lg px-2 py-1.5 text-xs text-white/75 hover:bg-white/6">
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate">{row.name}</span>
+                              {description ? (
+                                <span className="mt-0.5 block wrap-break-word text-white/55">
+                                  {description}
+                                </span>
+                              ) : null}
+                            </span>
+                            <Badge
+                              variant={badge.variant}
+                              className="mt-0.5 h-5 rounded-full px-2 text-xs"
+                            >
+                              {badge.label}
+                            </Badge>
+                            <Switch
+                              className="mt-0.5"
                               checked={granted}
                               aria-label={`${granted ? "Revoke" : "Grant"} ${row.name}`}
                               onCheckedChange={(checked) => {
-                                const nextGranted = checked === true;
                                 if (
-                                  nextGranted &&
+                                  checked &&
                                   row.descriptor?.readOnlyHint !== true
                                 ) {
                                   setConfirmWriteGrant(confirmationKey);
@@ -331,7 +350,7 @@ export function ProviderAppsPanel() {
                                 setConfirmWriteGrant(null);
                                 library.setGrantedTools(
                                   id,
-                                  nextGranted
+                                  checked
                                     ? [...provider.grantedTools, row.name]
                                     : provider.grantedTools.filter(
                                         (name) => name !== row.name,
@@ -339,26 +358,17 @@ export function ProviderAppsPanel() {
                                 );
                               }}
                             />
-                            <span className="min-w-0 flex-1 truncate">
-                              {row.name}
-                            </span>
-                            <Badge
-                              variant={badge.variant}
-                              className="h-5 rounded-full px-2 text-xs"
-                            >
-                              {badge.label}
-                            </Badge>
                           </label>
                           {confirming ? (
                             <div
                               role="alert"
-                              className="mx-2 mb-1 flex flex-wrap items-center gap-2 rounded-lg bg-warning-wash px-2 py-1.5 text-xs text-warning-ink"
+                              className="mx-2 mb-1 flex flex-wrap items-center gap-2 px-2 py-1.5 text-xs text-white/55"
                             >
                               <span className="min-w-0 flex-1">
                                 This tool may change data.
                               </span>
                               <Button
-                                variant="destructive"
+                                variant="primary"
                                 onClick={() => {
                                   library.setGrantedTools(id, [
                                     ...provider.grantedTools,
@@ -371,6 +381,7 @@ export function ProviderAppsPanel() {
                               </Button>
                               <Button
                                 variant="ghost"
+                                className="text-white hover:bg-white/10"
                                 onClick={() => setConfirmWriteGrant(null)}
                               >
                                 Cancel

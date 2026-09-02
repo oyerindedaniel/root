@@ -76,6 +76,10 @@ describe("createVersionedStore", () => {
     expect(preferences.getSnapshot().value.dock).toEqual([
       { kind: "provider", id: "shop" },
     ]);
+    expect(preferences.getSnapshot().value.present).toEqual({
+      fill: "default",
+      preview: "default",
+    });
     expect(preferences.getSnapshot().failure).toBeNull();
     expect(preferences.getSnapshot().hydrated).toBe(true);
   });

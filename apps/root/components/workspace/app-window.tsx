@@ -1,5 +1,6 @@
 "use client";
 
+import { MinusIcon, PlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import type { ProviderPlacement } from "@repo/contracts";
 import { cn } from "@repo/ui/lib/cn";
 import {
@@ -150,12 +151,18 @@ function TrafficLight({
   label: string;
   onPress: () => void;
 }) {
+  let Icon = PlusIcon;
+  if (tone === "close") {
+    Icon = XMarkIcon;
+  } else if (tone === "min") {
+    Icon = MinusIcon;
+  }
   return (
     <button
       type="button"
       aria-label={label}
       className={cn(
-        "relative size-3 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "flex size-3 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
         tone === "close" && "bg-[#ff5f57]",
         tone === "min" && "bg-[#febc2e]",
         tone === "zoom" && "bg-[#28c840]",
@@ -163,9 +170,10 @@ function TrafficLight({
       onPointerDown={(event) => event.stopPropagation()}
       onClick={onPress}
     >
-      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[8px] leading-none text-black/70 opacity-0 group-hover/lights:opacity-100">
-        {tone === "close" ? "×" : tone === "min" ? "–" : "+"}
-      </span>
+      <Icon
+        className="size-2 text-black/70 opacity-0 group-hover/lights:opacity-100"
+        strokeWidth={2.5}
+      />
     </button>
   );
 }

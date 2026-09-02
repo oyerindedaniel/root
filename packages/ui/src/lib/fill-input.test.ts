@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  fillPaceMs,
   fillPresentedInput,
-  TOOL_PRESENT_FILL_MIN_MS,
-  TOOL_PRESENT_FILL_MS,
   TOOL_PRESENT_PREVIEW_MS,
   waitPresent,
   waitForChoice,
@@ -30,19 +27,6 @@ function record() {
     },
   };
 }
-
-describe("fillPaceMs", () => {
-  it("keeps 32ms through the reference length", () => {
-    expect(fillPaceMs(1)).toBe(TOOL_PRESENT_FILL_MS);
-    expect(fillPaceMs(8)).toBe(TOOL_PRESENT_FILL_MS);
-  });
-
-  it("shortens the delay as length grows and floors at 8ms", () => {
-    expect(fillPaceMs(16)).toBe(16);
-    expect(fillPaceMs(32)).toBe(TOOL_PRESENT_FILL_MIN_MS);
-    expect(fillPaceMs(120)).toBe(TOOL_PRESENT_FILL_MIN_MS);
-  });
-});
 
 describe("fillPresentedInput", () => {
   it("writes the full string once when instant", async () => {

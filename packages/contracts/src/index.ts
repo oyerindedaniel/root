@@ -4,6 +4,7 @@ export * from "./constants.js";
 export * from "./customers.js";
 export * from "./document-coedit.js";
 export * from "./document-pending.js";
+export * from "./document-present-pace.js";
 export * from "./document-visibility.js";
 export * from "./health.js";
 export * from "./model-context.js";
