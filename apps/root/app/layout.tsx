@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { PropsWithChildren } from "react";
+import { Analytics } from "@vercel/analytics/next";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import Script from "next/script";
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: PropsWithChildren) {
           />
         ) : null}
         <TrpcReactProvider>{children}</TrpcReactProvider>
+        <Analytics />
       </body>
     </html>
   );
