@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { buttonVariants } from "@repo/ui/button";
 
+import { preloadDesktopAssets } from "@/lib/desktop/preload-assets";
+
 const HACKATHON_SPONSORS = [
   { name: "OpenAI", src: "/sponsors/openai.svg" },
   { name: "Cloudflare", src: "/sponsors/cloudflare.svg" },
@@ -12,6 +14,7 @@ const HACKATHON_SPONSORS = [
 ] as const;
 
 export function RootHome() {
+  preloadDesktopAssets();
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-background">
       <main className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 p-6">

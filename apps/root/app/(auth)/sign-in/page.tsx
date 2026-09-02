@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { SignInForm } from "@/components/auth/sign-in-form";
 import { SignInProviderPattern } from "@/components/auth/sign-in-provider-pattern";
 import { getAccount } from "@/lib/auth/account";
+import { preloadDesktopAssets } from "@/lib/desktop/preload-assets";
 
 export default async function SignInPage() {
   const account = await getAccount();
@@ -10,6 +11,7 @@ export default async function SignInPage() {
     redirect("/");
   }
 
+  preloadDesktopAssets();
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-background">
       <SignInProviderPattern />
