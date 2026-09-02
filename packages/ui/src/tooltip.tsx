@@ -6,7 +6,7 @@ import type { ComponentProps } from "react";
 import { cn } from "./lib/cn";
 
 export function TooltipProvider({
-  delayDuration = 200,
+  delayDuration = 100,
   skipDelayDuration = 300,
   disableHoverableContent = true,
   ...props
