@@ -8,21 +8,13 @@ Built for the [WebMCP Challenge](https://openai.com/webmcp-challenge/).
 
 <table>
   <tr>
-    <td bgcolor="#ffffff" align="center">
-      <img src="apps/root/public/sponsors/openai.svg" height="20" alt="OpenAI" />
-      &nbsp;&nbsp;
-      <img src="apps/root/public/sponsors/cloudflare.svg" height="20" alt="Cloudflare" />
-      &nbsp;&nbsp;
-      <img src="apps/root/public/sponsors/vercel.svg" height="20" alt="Vercel" />
-      &nbsp;&nbsp;
-      <img src="apps/root/public/sponsors/render.svg" height="20" alt="Render" />
-      &nbsp;&nbsp;
-      <img src="apps/root/public/sponsors/netlify.svg" height="20" alt="Netlify" />
-      &nbsp;&nbsp;
-      <img src="apps/root/public/sponsors/shopify.svg" height="20" alt="Shopify" />
-      &nbsp;&nbsp;
-      <img src="apps/root/public/sponsors/googlechrome.svg" height="20" alt="Google Chrome" />
-    </td>
+    <td bgcolor="#ffffff" align="center"><img src="apps/root/public/sponsors/openai.svg" height="20" alt="OpenAI" /></td>
+    <td bgcolor="#ffffff" align="center"><img src="apps/root/public/sponsors/cloudflare.svg" height="20" alt="Cloudflare" /></td>
+    <td bgcolor="#ffffff" align="center"><img src="apps/root/public/sponsors/vercel.svg" height="20" alt="Vercel" /></td>
+    <td bgcolor="#ffffff" align="center"><img src="apps/root/public/sponsors/render.svg" height="20" alt="Render" /></td>
+    <td bgcolor="#ffffff" align="center"><img src="apps/root/public/sponsors/netlify.svg" height="20" alt="Netlify" /></td>
+    <td bgcolor="#ffffff" align="center"><img src="apps/root/public/sponsors/shopify.svg" height="20" alt="Shopify" /></td>
+    <td bgcolor="#ffffff" align="center"><img src="apps/root/public/sponsors/googlechrome.svg" height="20" alt="Google Chrome" /></td>
   </tr>
 </table>
 
