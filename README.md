@@ -10,22 +10,13 @@ A desktop where a person and an agent share the same live apps. Each app is a re
 
 Root loads each provider in an iframe (`allow="tools"`) and talks only to tools that document exposes to Root. It does not scrape the page.
 
-<p>
-  <img src="apps/root/public/icons/catalog-icon.webp" width="32" height="32" alt="Catalog" />
-  <strong>Catalog</strong> — search, open, and create products.
-</p>
-<p>
-  <img src="apps/root/public/icons/customers-icon.webp" width="32" height="32" alt="Customers" />
-  <strong>Customers</strong> — search, open, and create customers.
-</p>
-<p>
-  <img src="apps/root/public/icons/cases-icon.webp" width="32" height="32" alt="Cases" />
-  <strong>Cases</strong> — search, open, and create support cases.
-</p>
-<p>
-  <img src="apps/lab/public/icons/lab-icon.webp" width="32" height="32" alt="Lab" />
-  <strong>Lab</strong> — custom provider. Add it in Apps, Test, then grant tools. Not on prepare.
-</p>
+<img src="apps/root/public/icons/catalog-icon.webp" width="32" height="32" align="absmiddle" alt="Catalog" /> <strong>Catalog</strong> — search, open, and create products.
+
+<img src="apps/root/public/icons/customers-icon.webp" width="32" height="32" align="absmiddle" alt="Customers" /> <strong>Customers</strong> — search, open, and create customers.
+
+<img src="apps/root/public/icons/cases-icon.webp" width="32" height="32" align="absmiddle" alt="Cases" /> <strong>Cases</strong> — search, open, and create support cases.
+
+<img src="apps/lab/public/icons/lab-icon.webp" width="32" height="32" align="absmiddle" alt="Lab" /> <strong>Lab</strong> — add in Apps, Test, then grant tools. Not on prepare.
 
 A person and an agent can run a pass across Catalog, Customers, and Cases on the live windows: search, open a record, fill a create form. Writes wait for the person to click on stage. A site that is not builtin can still join after a human grant (`invoke_granted_tool`). Take control stops the agent on that window.
 
