@@ -37,9 +37,7 @@ yarn-error.log*
 .DS_Store
 *.pem
 CLAUDE.md
-.cursor/*
-!.cursor/rules/
-!.cursor/rules/**
+.cursor/
 
 
 # Local product and architecture guides
