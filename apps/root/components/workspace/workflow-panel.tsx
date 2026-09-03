@@ -140,18 +140,18 @@ export function WorkflowPanel({ rows }: { rows: WorkflowActivityRow[] }) {
           Apps
         </Tabs.Trigger>
         <Tabs.Trigger
-          value="guide"
-          id="workflow-guide-tab"
-          controlsId="workflow-guide-panel"
-        >
-          Guide
-        </Tabs.Trigger>
-        <Tabs.Trigger
           value="settings"
           id="workflow-settings-tab"
           controlsId="workflow-settings-panel"
         >
           Settings
+        </Tabs.Trigger>
+        <Tabs.Trigger
+          value="guide"
+          id="workflow-guide-tab"
+          controlsId="workflow-guide-panel"
+        >
+          Guide
         </Tabs.Trigger>
       </Tabs.List>
       <motion.div
