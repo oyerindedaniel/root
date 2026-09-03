@@ -14,6 +14,7 @@ import {
 } from "@repo/contracts";
 
 import { getProvider, type ProviderCatalog } from "@/lib/providers/catalog";
+import type { CustomProvider } from "@/lib/storage/workspace-preferences";
 import { executeRegisteredTool } from "@/lib/webmcp/execute";
 import { validateJsonSchemaInput } from "@/lib/webmcp/json-schema-validator";
 
@@ -26,7 +27,7 @@ export type WindowOperation = {
 };
 
 export type InvokeGrantedDependencies = {
-  catalog: ProviderCatalog;
+  getCatalog: () => ProviderCatalog;
   acquireOperation: () => WindowOperation | null;
   adoptAbort?: (instanceId: string, parent: AbortSignal) => AbortSignal;
   getState: () => RuntimeState;
@@ -50,32 +51,45 @@ export type InvokeGrantedDependencies = {
   }) => Promise<string>;
 };
 
+function requireGrantedCustomProvider(
+  catalog: ProviderCatalog,
+  providerId: string,
+  tool: string,
+) {
+  const provider = getProvider(catalog, providerId);
+  if (provider.source !== "custom") {
+    throw new GatewayError(
+      "provider_not_invokable",
+      "Built-in providers are available only through typed workflows.",
+    );
+  }
+  if (!provider.grantedTools.includes(tool)) {
+    throw new GatewayError(
+      "tool_not_granted",
+      "This tool has not been granted by the user.",
+    );
+  }
+  return provider;
+}
+
 export async function invokeGrantedTool(options: {
   input: InvokeGrantedToolInput;
   signal: AbortSignal;
   dependencies: InvokeGrantedDependencies;
 }): Promise<BoundedResultEnvelope<InvokeGrantedToolOutput>> {
   const { input, signal, dependencies } = options;
-  let provider;
+  let provider: CustomProvider;
   try {
-    provider = getProvider(dependencies.catalog, input.providerId);
+    provider = requireGrantedCustomProvider(
+      dependencies.getCatalog(),
+      input.providerId,
+      input.tool,
+    );
   } catch (error) {
     if (error instanceof GatewayError) {
       return boundedError(error.code, error.message);
     }
     return boundedError("unknown_provider", "Provider is not installed.");
-  }
-  if (provider.source !== "custom") {
-    return boundedError(
-      "provider_not_invokable",
-      "Built-in providers are available only through typed workflows.",
-    );
-  }
-  if (!provider.grantedTools.includes(input.tool)) {
-    return boundedError(
-      "tool_not_granted",
-      "This tool has not been granted by the user.",
-    );
   }
   const operation = dependencies.acquireOperation();
   if (!operation) {
@@ -99,6 +113,18 @@ export async function invokeGrantedTool(options: {
       return discovered;
     }
     operationSignal.throwIfAborted();
+    try {
+      provider = requireGrantedCustomProvider(
+        dependencies.getCatalog(),
+        input.providerId,
+        input.tool,
+      );
+    } catch (error) {
+      if (error instanceof GatewayError) {
+        return boundedError(error.code, error.message);
+      }
+      return boundedError("unknown_provider", "Provider is not installed.");
+    }
     const state = dependencies.getState();
     const windowState = state.windows[operation.instanceId];
     if (

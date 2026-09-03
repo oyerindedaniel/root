@@ -31,6 +31,7 @@ import {
   createVersionedStore,
   useVersionedStore,
   type StorageFailure,
+  type StorageSnapshot,
 } from "@/lib/storage/versioned-store";
 
 type NewCustomProvider = Omit<
@@ -40,6 +41,7 @@ type NewCustomProvider = Omit<
 
 export type ProviderLibraryApi = {
   catalog: ProviderCatalog;
+  getCatalog: () => ProviderCatalog;
   preferences: WorkspacePreferences;
   apps: InstalledApp[];
   storageFailure: StorageFailure | null;
@@ -59,6 +61,26 @@ export type ProviderLibraryApi = {
 };
 
 const ProviderLibraryContext = createContext<ProviderLibraryApi | null>(null);
+
+function resolveProviderLibrary(
+  directory: ProviderDirectory,
+  defaults: WorkspacePreferences,
+  snapshot: StorageSnapshot<WorkspacePreferences>,
+) {
+  try {
+    return {
+      preferences: snapshot.value,
+      catalog: createProviderCatalog(directory, snapshot.value),
+      storageFailure: snapshot.failure,
+    };
+  } catch {
+    return {
+      preferences: defaults,
+      catalog: createProviderCatalog(directory, defaults),
+      storageFailure: "corrupt" as const,
+    };
+  }
+}
 
 export function ProviderLibraryProvider({
   accountId,
@@ -81,21 +103,10 @@ export function ProviderLibraryProvider({
     [accountId, defaults],
   );
   const snapshot = useVersionedStore(store);
-  const resolved = useMemo(() => {
-    try {
-      return {
-        preferences: snapshot.value,
-        catalog: createProviderCatalog(directory, snapshot.value),
-        storageFailure: snapshot.failure,
-      };
-    } catch {
-      return {
-        preferences: defaults,
-        catalog: createProviderCatalog(directory, defaults),
-        storageFailure: "corrupt" as const,
-      };
-    }
-  }, [defaults, directory, snapshot]);
+  const resolved = useMemo(
+    () => resolveProviderLibrary(directory, defaults, snapshot),
+    [defaults, directory, snapshot],
+  );
 
   const api = useMemo<ProviderLibraryApi>(() => {
     function update(
@@ -105,6 +116,13 @@ export function ProviderLibraryProvider({
     }
     return {
       catalog: resolved.catalog,
+      getCatalog() {
+        return resolveProviderLibrary(
+          directory,
+          defaults,
+          store.getSnapshot(),
+        ).catalog;
+      },
       preferences: resolved.preferences,
       apps: installedApps(resolved.catalog),
       storageFailure: resolved.storageFailure,
@@ -181,8 +199,8 @@ export function ProviderLibraryProvider({
       },
     };
   }, [
-    defaults.dock,
-    directory.builtins,
+    defaults,
+    directory,
     resolved,
     store,
   ]);

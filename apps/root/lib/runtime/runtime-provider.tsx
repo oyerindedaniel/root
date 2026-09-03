@@ -154,7 +154,7 @@ export function RuntimeProvider({
   account: Account;
   directory: ProviderDirectory;
 }>) {
-  const { catalog, preferences } = useProviderLibrary();
+  const { catalog, getCatalog, preferences } = useProviderLibrary();
   const [state, reactDispatch] = useReducer(
     runtimeReducer,
     account,
@@ -575,7 +575,7 @@ export function RuntimeProvider({
         input,
         signal,
         dependencies: {
-          catalog,
+          getCatalog,
           acquireOperation: () => {
             const instanceId = openProvider(input.providerId, "agent");
             const releaseLease = holdWindowLease(instanceId);
@@ -601,7 +601,7 @@ export function RuntimeProvider({
         },
       });
     },
-    [catalog, holdWindowLease, openProvider, runDiscovery],
+    [getCatalog, holdWindowLease, openProvider, runDiscovery],
   );
 
   const prepareWorkflow = useCallback((

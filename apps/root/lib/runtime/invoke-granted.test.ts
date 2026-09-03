@@ -111,6 +111,7 @@ function setup(options: {
   executeTool?: () => Promise<string>;
   handle?: RegisteredTool | null;
   acquireOperation?: InvokeGrantedDependencies["acquireOperation"];
+  getCatalog?: InvokeGrantedDependencies["getCatalog"];
 } = {}) {
   let state = options.state ?? readyState(options.discoveredTool);
   const discover = vi.fn(async () => {
@@ -143,7 +144,7 @@ function setup(options: {
     () => options.handle === null ? undefined : (options.handle ?? handle),
   );
   const dependencies: InvokeGrantedDependencies = {
-    catalog,
+    getCatalog: options.getCatalog ?? (() => catalog),
     acquireOperation,
     getState: () => state,
     discover,
@@ -205,6 +206,41 @@ describe("invokeGrantedTool", () => {
     );
     expect(current.releaseOperation).toHaveBeenCalledOnce();
     expect(current.getState().workflow).toBe(workflow);
+  });
+
+  it("refuses execution when the grant is revoked during discovery", async () => {
+    let finishDiscovery: (() => void) | undefined;
+    const discoveryPending = new Promise<void>((resolve) => {
+      finishDiscovery = resolve;
+    });
+    const executeTool = vi.fn(async () => JSON.stringify({ rows: [] }));
+    let currentCatalog = catalog;
+    const current = setup({
+      executeTool,
+      getCatalog: () => currentCatalog,
+    });
+    current.dependencies.discover = vi.fn(async () => {
+      await discoveryPending;
+      return boundedSuccess({
+        providerId: provider.id,
+        origin: provider.origin,
+        contractVersion: null,
+        tools: [descriptor()],
+      });
+    });
+
+    const result = invoke(current.dependencies);
+    currentCatalog = createProviderCatalog(directory, {
+      ...preferences,
+      customProviders: [{ ...provider, grantedTools: [] }],
+    });
+    finishDiscovery?.();
+
+    await expect(result).resolves.toMatchObject({
+      status: "error",
+      code: "tool_not_granted",
+    });
+    expect(executeTool).not.toHaveBeenCalled();
   });
 
   it("rejects unknown, built-in, and ungranted providers before leasing", async () => {
