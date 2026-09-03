@@ -104,7 +104,7 @@ export function CustomerCreate() {
             name="email"
           />
         </Label>
-        <Button type="submit" intent={present.intent}>
+        <Button type="submit" intent={present.intent} approval={present.intent}>
           Create
         </Button>
       </form>

@@ -80,7 +80,6 @@ describe("createVersionedStore", () => {
       fill: "default",
       preview: "default",
     });
-    expect(preferences.getSnapshot().value.selectionMode).toBe("manual");
     expect(preferences.getSnapshot().value.notifyWait).toBe(false);
     expect(preferences.getSnapshot().failure).toBeNull();
     expect(preferences.getSnapshot().hydrated).toBe(true);

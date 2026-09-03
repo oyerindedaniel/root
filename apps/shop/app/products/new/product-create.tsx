@@ -125,7 +125,7 @@ export function ProductCreate() {
             inputMode="numeric"
           />
         </Label>
-        <Button type="submit" intent={present.intent}>
+        <Button type="submit" intent={present.intent} approval={present.intent}>
           Create
         </Button>
       </form>

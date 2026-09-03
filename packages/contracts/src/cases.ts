@@ -59,8 +59,6 @@ export const searchCasesOutputSchema = z.object({
   status: z.literal("success"),
   query: searchCasesOutputQuerySchema,
   cases: z.array(supportCaseSchema).max(12),
-  selectedId: z.string().min(1).max(64).optional(),
-  selected: portableReferenceSchema.optional(),
 });
 
 export type SearchCasesOutput = z.infer<typeof searchCasesOutputSchema>;
@@ -72,12 +70,14 @@ export const caseIdInputSchema = z.strictObject({
 export type CaseIdInput = z.infer<typeof caseIdInputSchema>;
 
 export const openCaseProposedArgumentsSchema = z.strictObject({
-  id: z.union([z.string().min(1).max(64), bindQuerySchema]),
+  id: bindQuerySchema,
 });
 
 export type OpenCaseProposedArguments = z.infer<
   typeof openCaseProposedArgumentsSchema
 >;
+
+export const openCaseByIdProposedArgumentsSchema = caseIdInputSchema;
 
 export const openCaseOutputSchema = z.object({
   status: z.literal("success"),
@@ -123,7 +123,7 @@ export const OPEN_CASE_INPUT_SCHEMA = {
   properties: {
     id: {
       type: "string",
-      description: "Case id, or bind an earlier selected snapshot.",
+      description: "Case id resolved from an earlier selected snapshot.",
     },
   },
   required: ["id"],

@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 
 import { BusySpinner } from "./busy-spinner";
 import { cn } from "./lib/cn";
+import { presentAskVariants } from "./present-ask";
 import { PresentHalo } from "./present-halo";
 
 export const buttonVariants = cva(
@@ -27,6 +28,7 @@ export type ButtonProps = ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     pending?: boolean;
     intent?: boolean;
+    approval?: boolean;
   };
 
 export function Button({
@@ -35,6 +37,7 @@ export function Button({
   type = "button",
   pending = false,
   intent = false,
+  approval = false,
   disabled,
   children,
   ...props
@@ -42,6 +45,22 @@ export function Button({
   return (
     <span className="relative inline-flex w-fit self-start">
       <PresentHalo active={intent} rounded="3xl" />
+      {approval ? (
+        <span className="absolute bottom-full left-1/2 z-10 mb-3 w-52 -translate-x-1/2">
+          <span className="relative block w-full">
+            <PresentHalo active rounded="3xl" />
+            <span
+              className={cn(
+                presentAskVariants({ size: "compact" }),
+                "w-full justify-center px-3 py-1.5 text-center whitespace-normal",
+              )}
+            >
+              Review the details, then approve Create
+            </span>
+            <span className="absolute left-1/2 top-full size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-white shadow-[0_8px_24px_rgb(0_0_0_/_0.18)]" />
+          </span>
+        </span>
+      ) : null}
       <button
         type={type}
         className={cn("relative", buttonVariants({ variant }), className)}

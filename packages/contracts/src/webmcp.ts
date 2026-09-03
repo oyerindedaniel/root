@@ -10,6 +10,10 @@ export const providerIdSchema = z
 
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
+export const builtinProviderIdSchema = z.enum(["accounts", "shop", "support"]);
+
+export type BuiltinProviderId = z.infer<typeof builtinProviderIdSchema>;
+
 export const webmcpToolNameSchema = z
   .string()
   .min(1)
@@ -153,7 +157,9 @@ export type BoundedResultEnvelope<
 
 export const SHOP_EXPECTED_TOOLS = [
   "search_products",
+  "select_result",
   "open_product",
+  "open_product_by_id",
   "create_product",
 ] as const;
 
@@ -161,7 +167,9 @@ export const SHOP_CONTRACT_VERSION = "1.0.0" satisfies ContractVersion;
 
 export const ACCOUNTS_EXPECTED_TOOLS = [
   "search_customers",
+  "select_result",
   "open_customer",
+  "open_customer_by_id",
   "create_customer",
 ] as const;
 
@@ -169,7 +177,9 @@ export const ACCOUNTS_CONTRACT_VERSION = "1.0.0" satisfies ContractVersion;
 
 export const SUPPORT_EXPECTED_TOOLS = [
   "search_cases",
+  "select_result",
   "open_case",
+  "open_case_by_id",
   "create_case",
 ] as const;
 

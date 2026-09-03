@@ -5,8 +5,6 @@ import {
   parsePendingHumanMessage,
   PENDING_HUMAN_TIMEOUT_MS,
   pendingHumanMessage,
-  parseSelectionModeMessage,
-  selectionModeMessage,
   WEBMCP_PENDING_HUMAN_TYPE,
 } from "../src/document-pending.js";
 
@@ -42,21 +40,6 @@ describe("parsePendingHumanMessage", () => {
         rootOrigin,
         shopOrigin,
       ),
-    ).toBeNull();
-  });
-});
-
-describe("parseSelectionModeMessage", () => {
-  it("reads the configured mode only from the Root origin", () => {
-    expect(
-      parseSelectionModeMessage(
-        selectionModeMessage("auto"),
-        rootOrigin,
-        rootOrigin,
-      ),
-    ).toBe("auto");
-    expect(
-      parseSelectionModeMessage(selectionModeMessage("auto"), shopOrigin, rootOrigin),
     ).toBeNull();
   });
 });

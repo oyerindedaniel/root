@@ -5,6 +5,7 @@ import { requirePublicEnv } from "@repo/api-client/env";
 import {
   CREATE_CASE_INPUT_SCHEMA,
   OPEN_CASE_INPUT_SCHEMA,
+  SELECT_RESULT_INPUT_SCHEMA,
   SEARCH_CASES_INPUT_SCHEMA,
   caseIdInputSchema,
   caseSearchText,
@@ -14,6 +15,8 @@ import {
   openCaseOutputSchema,
   parseToolExecuteInput,
   portableCaseReference,
+  selectResultOutputSchema,
+  selectResultToolInputSchema,
   searchCasesOutputSchema,
   searchCasesToolInputSchema,
 } from "@repo/contracts";
@@ -37,6 +40,7 @@ const rootOrigin = requirePublicEnv(
 type SearchSurface = {
   queryInput: HTMLInputElement | null;
   setQuery: (value: string) => void;
+  getCases: () => ReturnType<typeof searchCasesOutputSchema.parse>["cases"];
   setBoundAsk: (value: string | null) => void;
   showEmptyBound: () => void;
   runSearch: (
@@ -207,27 +211,8 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
               if (!text) {
                 search.showEmptyBound();
               }
-              const selectedId = await present.waitForSelect({
-                candidateId: result.cases[0]?.id ?? null,
-                signal,
-              });
-              const hit = result.cases.find(
-                (supportCase) => supportCase.id === selectedId,
-              );
-              present.commit(selectedId ?? result.cases[0]?.id ?? null);
-              return {
-                ...result,
-                query: parsed.query,
-                ...(selectedId ? { selectedId } : {}),
-                ...(hit
-                  ? {
-                      selected: portableCaseReference(
-                        hit,
-                        new Date().toISOString(),
-                      ),
-                    }
-                  : {}),
-              };
+              present.commit(null);
+              return { ...result, query: parsed.query };
             }
             const filled = await present.fill({
               text: parsed.query,
@@ -250,26 +235,8 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
             const submitted =
               search.queryInput?.value ?? filled?.text ?? parsed.query;
             const result = await search.runSearch(submitted, signal);
-            const selectedId = await present.waitForSelect({
-              candidateId: result.cases[0]?.id ?? null,
-              signal,
-            });
-            const hit = result.cases.find(
-              (supportCase) => supportCase.id === selectedId,
-            );
-            present.commit(selectedId ?? result.cases[0]?.id ?? null);
-            return {
-              ...result,
-              ...(selectedId ? { selectedId } : {}),
-              ...(hit
-                ? {
-                    selected: portableCaseReference(
-                      hit,
-                      new Date().toISOString(),
-                    ),
-                  }
-                : {}),
-            };
+            present.commit(null);
+            return result;
           } catch (caught) {
             present.commit(null);
             throw caught;
@@ -283,6 +250,43 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
         exposedTo: [rootOrigin],
         signal: controller.signal,
       },
+    );
+    void modelContext.registerTool(
+      {
+        name: "select_result",
+        title: "Select case",
+        description: "Selects one case from the current search results.",
+        inputSchema: SELECT_RESULT_INPUT_SCHEMA,
+        annotations: { readOnlyHint: true, untrustedContentHint: false },
+        execute: async (input, options) => {
+          const signal = options?.signal ?? controller.signal;
+          const parsed = selectResultToolInputSchema.parse(parseToolExecuteInput(input));
+          const source = searchCasesOutputSchema.parse(parsed.source);
+          const search = await searchSlot.waitUntil(() => true, signal);
+          const cases = search.getCases();
+          if (cases.length !== source.cases.length || source.cases.some((supportCase) => !cases.some((item) => item.id === supportCase.id))) {
+            throw new Error("The selected source collection is no longer current.");
+          }
+          const candidate = cases[0];
+          if (!candidate) {
+            throw new Error("The source collection has no selectable case.");
+          }
+          present.arm();
+          try {
+            const selectedId = cases.length === 1 ? candidate.id : await present.waitForSelect({ candidateId: candidate.id, signal });
+            const selected = cases.find((supportCase) => supportCase.id === selectedId);
+            if (!selected || !source.cases.some((supportCase) => supportCase.id === selected.id)) {
+              throw new Error("The chosen case is not in the source collection.");
+            }
+            present.commit(selected.id);
+            return selectResultOutputSchema.parse({ selected: portableCaseReference(selected, new Date().toISOString()) });
+          } catch (caught) {
+            present.commit(null);
+            throw caught;
+          }
+        },
+      },
+      { exposedTo: [rootOrigin], signal: controller.signal },
     );
     void modelContext.registerTool(
       {
@@ -312,6 +316,24 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
         exposedTo: [rootOrigin],
         signal: controller.signal,
       },
+    );
+    void modelContext.registerTool(
+      {
+        name: "open_case_by_id",
+        title: "Open case by id",
+        description: "Opens a case record using an explicit case id.",
+        inputSchema: OPEN_CASE_INPUT_SCHEMA,
+        annotations: { readOnlyHint: true, untrustedContentHint: false },
+        execute: async (input, options) => {
+          const signal = options?.signal ?? controller.signal;
+          const parsed = caseIdInputSchema.parse(parseToolExecuteInput(input));
+          const result = openCaseOutputSchema.parse(await trpcClient.v1.support.getCase.query(parsed, { signal }));
+          routerRef.current.push(`/cases/${result.case.id}`);
+          await detailSlot.waitUntil((surface) => surface.id === result.case.id, signal);
+          return result;
+        },
+      },
+      { exposedTo: [rootOrigin], signal: controller.signal },
     );
     void modelContext.registerTool(
       {

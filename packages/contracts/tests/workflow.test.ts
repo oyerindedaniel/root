@@ -489,16 +489,28 @@ describe("gateway envelopes", () => {
       expectTypeOf(result.data.customers).toEqualTypeOf<Customer[]>();
     } else if (
       result.tool === "accounts.open_customer" ||
-      result.tool === "accounts.create_customer"
+      result.tool === "accounts.create_customer" ||
+      result.tool === "accounts.open_customer_by_id"
     ) {
       expectTypeOf(result.data.customer).toEqualTypeOf<Customer>();
     } else if (
       result.tool === "shop.open_product" ||
-      result.tool === "shop.create_product"
+      result.tool === "shop.create_product" ||
+      result.tool === "shop.open_product_by_id"
     ) {
       expectTypeOf(result.data.product).toEqualTypeOf<ShopProduct>();
-    } else {
+    } else if (
+      result.tool === "support.open_case" ||
+      result.tool === "support.create_case" ||
+      result.tool === "support.open_case_by_id"
+    ) {
       expectTypeOf(result.data.case).toEqualTypeOf<SupportCase>();
+    } else if (
+      result.tool === "accounts.select_result" ||
+      result.tool === "shop.select_result" ||
+      result.tool === "support.select_result"
+    ) {
+      expectTypeOf(result.data.selected.sourceId).toEqualTypeOf<string>();
     }
   });
 });

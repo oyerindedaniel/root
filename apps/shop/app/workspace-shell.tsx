@@ -5,6 +5,7 @@ import { requirePublicEnv } from "@repo/api-client/env";
 import {
   CREATE_PRODUCT_INPUT_SCHEMA,
   OPEN_PRODUCT_INPUT_SCHEMA,
+  SELECT_RESULT_INPUT_SCHEMA,
   SEARCH_PRODUCTS_INPUT_SCHEMA,
   createDocumentVisibilityGate,
   createProductInputSchema,
@@ -12,6 +13,8 @@ import {
   openProductOutputSchema,
   parseToolExecuteInput,
   portableProductReference,
+  selectResultOutputSchema,
+  selectResultToolInputSchema,
   productIdInputSchema,
   searchProductsInputSchema,
   searchProductsOutputSchema,
@@ -36,6 +39,7 @@ const rootOrigin = requirePublicEnv(
 type SearchSurface = {
   queryInput: HTMLInputElement | null;
   setQuery: (value: string) => void;
+  getProducts: () => ReturnType<typeof searchProductsOutputSchema.parse>["products"];
   runSearch: (
     query: string,
     signal?: AbortSignal,
@@ -207,26 +211,8 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
             const submitted =
               search.queryInput?.value ?? filled?.text ?? parsed.query;
             const result = await search.runSearch(submitted, signal);
-            const selectedId = await present.waitForSelect({
-              candidateId: result.products[0]?.id ?? null,
-              signal,
-            });
-            const hit = result.products.find(
-              (product) => product.id === selectedId,
-            );
-            present.commit(selectedId ?? result.products[0]?.id ?? null);
-            return {
-              ...result,
-              ...(selectedId ? { selectedId } : {}),
-              ...(hit
-                ? {
-                    selected: portableProductReference(
-                      hit,
-                      new Date().toISOString(),
-                    ),
-                  }
-                : {}),
-            };
+            present.commit(null);
+            return result;
           } catch (caught) {
             present.commit(null);
             throw caught;
@@ -239,6 +225,43 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
         exposedTo: [rootOrigin],
         signal: controller.signal,
       },
+    );
+    void modelContext.registerTool(
+      {
+        name: "select_result",
+        title: "Select product",
+        description: "Selects one product from the current search results.",
+        inputSchema: SELECT_RESULT_INPUT_SCHEMA,
+        annotations: { readOnlyHint: true, untrustedContentHint: false },
+        execute: async (input, options) => {
+          const signal = options?.signal ?? controller.signal;
+          const parsed = selectResultToolInputSchema.parse(parseToolExecuteInput(input));
+          const source = searchProductsOutputSchema.parse(parsed.source);
+          const search = await searchSlot.waitUntil(() => true, signal);
+          const products = search.getProducts();
+          if (products.length !== source.products.length || source.products.some((product) => !products.some((item) => item.id === product.id))) {
+            throw new Error("The selected source collection is no longer current.");
+          }
+          const candidate = products[0];
+          if (!candidate) {
+            throw new Error("The source collection has no selectable product.");
+          }
+          present.arm();
+          try {
+            const selectedId = products.length === 1 ? candidate.id : await present.waitForSelect({ candidateId: candidate.id, signal });
+            const selected = products.find((product) => product.id === selectedId);
+            if (!selected || !source.products.some((product) => product.id === selected.id)) {
+              throw new Error("The chosen product is not in the source collection.");
+            }
+            present.commit(selected.id);
+            return selectResultOutputSchema.parse({ selected: portableProductReference(selected, new Date().toISOString()) });
+          } catch (caught) {
+            present.commit(null);
+            throw caught;
+          }
+        },
+      },
+      { exposedTo: [rootOrigin], signal: controller.signal },
     );
     void modelContext.registerTool(
       {
@@ -270,6 +293,24 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
         exposedTo: [rootOrigin],
         signal: controller.signal,
       },
+    );
+    void modelContext.registerTool(
+      {
+        name: "open_product_by_id",
+        title: "Open product by id",
+        description: "Opens a product record using an explicit product id.",
+        inputSchema: OPEN_PRODUCT_INPUT_SCHEMA,
+        annotations: { readOnlyHint: true, untrustedContentHint: false },
+        execute: async (input, options) => {
+          const signal = options?.signal ?? controller.signal;
+          const parsed = productIdInputSchema.parse(parseToolExecuteInput(input));
+          const result = openProductOutputSchema.parse(await trpcClient.v1.shop.getProduct.query(parsed, { signal }));
+          routerRef.current.push(`/products/${result.product.id}`);
+          await detailSlot.waitUntil((surface) => surface.id === result.product.id, signal);
+          return result;
+        },
+      },
+      { exposedTo: [rootOrigin], signal: controller.signal },
     );
     void modelContext.registerTool(
       {

@@ -25,7 +25,9 @@ describe("loadProviderDirectory", () => {
     expect(shop.origin).toBe("http://localhost:3002");
     expect(shop.expectedTools).toEqual([
       "search_products",
+      "select_result",
       "open_product",
+      "open_product_by_id",
       "create_product",
     ]);
     expect(shop.source).toBe("builtin");
@@ -33,13 +35,17 @@ describe("loadProviderDirectory", () => {
     expect(accounts.origin).toBe("http://localhost:3001");
     expect(accounts.expectedTools).toEqual([
       "search_customers",
+      "select_result",
       "open_customer",
+      "open_customer_by_id",
       "create_customer",
     ]);
     expect(support.origin).toBe("http://localhost:3003");
     expect(support.expectedTools).toEqual([
       "search_cases",
+      "select_result",
       "open_case",
+      "open_case_by_id",
       "create_case",
     ]);
     expect(shop.label).toBe("Catalog");

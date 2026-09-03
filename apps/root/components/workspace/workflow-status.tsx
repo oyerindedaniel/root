@@ -49,11 +49,12 @@ function argumentLabel(step: PreparedWorkflowStep | null | undefined) {
   if (!step) {
     return null;
   }
-  const query = workflowQueryLabel(Reflect.get(step.arguments, "query"));
+  const argumentsRecord = step.arguments as Record<string, unknown>;
+  const query = workflowQueryLabel(Reflect.get(argumentsRecord, "query"));
   if (query) {
     return query;
   }
-  return workflowQueryLabel(Reflect.get(step.arguments, "id"));
+  return workflowQueryLabel(Reflect.get(argumentsRecord, "id"));
 }
 
 function snapTransition(reduceMotion: boolean | null) {

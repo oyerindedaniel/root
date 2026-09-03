@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { bindQuerySchema, portableReferenceSchema } from "./portable-reference.js";
+import { bindQuerySchema } from "./portable-reference.js";
 
 export const searchCustomersInputSchema = z.strictObject({
   query: z.string().min(1).max(120),
@@ -20,8 +20,6 @@ export const searchCustomersOutputSchema = z.object({
   status: z.literal("success"),
   query: z.string().min(1).max(120),
   customers: z.array(customerSchema).max(12),
-  selectedId: z.string().min(1).max(64).optional(),
-  selected: portableReferenceSchema.optional(),
 });
 
 export type SearchCustomersOutput = z.infer<typeof searchCustomersOutputSchema>;
@@ -33,12 +31,14 @@ export const customerIdInputSchema = z.strictObject({
 export type CustomerIdInput = z.infer<typeof customerIdInputSchema>;
 
 export const openCustomerProposedArgumentsSchema = z.strictObject({
-  id: z.union([z.string().min(1).max(64), bindQuerySchema]),
+  id: bindQuerySchema,
 });
 
 export type OpenCustomerProposedArguments = z.infer<
   typeof openCustomerProposedArgumentsSchema
 >;
+
+export const openCustomerByIdProposedArgumentsSchema = customerIdInputSchema;
 
 export const openCustomerOutputSchema = z.object({
   status: z.literal("success"),
@@ -77,7 +77,7 @@ export const OPEN_CUSTOMER_INPUT_SCHEMA = {
   properties: {
     id: {
       type: "string",
-      description: "Customer id, or bind an earlier selected snapshot.",
+      description: "Customer id resolved from an earlier selected snapshot.",
     },
   },
   required: ["id"],

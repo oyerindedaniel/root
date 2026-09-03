@@ -1,4 +1,4 @@
-import type { PresentPaceName, SelectionMode } from "@repo/contracts";
+import type { PresentPaceName } from "@repo/contracts";
 
 export const TOOL_PRESENT_FILL_MS = 32;
 export const TOOL_PRESENT_FILL_REF_CHARS = 8;
@@ -102,20 +102,6 @@ export function waitForChoice(options: {
     });
     signal?.addEventListener("abort", onAbort, { once: true });
   });
-}
-
-export async function waitForSelection(options: {
-  selectionMode: SelectionMode;
-  candidateId: string;
-  autoDelayMs: number;
-  signal?: AbortSignal;
-  bind: (choose: (id: string) => void) => () => void;
-}) {
-  if (options.selectionMode === "auto") {
-    await waitPresent(options.autoDelayMs, options.signal);
-    return options.candidateId;
-  }
-  return waitForChoice(options);
 }
 
 function writeInput(input: FillInputNode | null, value: string) {

@@ -424,20 +424,25 @@ describe("prepareWorkflow", () => {
           arguments: { query: "ada" },
         },
         {
+          providerId: "accounts",
+          tool: "select_result",
+          arguments: { source: { bind: { stepIndex: 0 } } },
+        },
+        {
           providerId: "support",
           tool: "search_cases",
-          arguments: { query: { bind: { stepIndex: 0 } } },
+          arguments: { query: { bind: { stepIndex: 1 } } },
         },
       ],
     });
     expect(prepared.ok).toBe(true);
     if (prepared.ok) {
-      const step = prepared.steps[1];
+      const step = prepared.steps[2];
       if (!step || step.toolName !== "search_cases") {
         throw new Error("expected search_cases");
       }
       expect(step.arguments.query).toEqual({
-        bind: { stepIndex: 0 },
+        bind: { stepIndex: 1 },
       });
     }
   });
@@ -455,17 +460,22 @@ describe("prepareWorkflow", () => {
         },
         {
           providerId: "accounts",
+          tool: "select_result",
+          arguments: { source: { bind: { stepIndex: 0 } } },
+        },
+        {
+          providerId: "accounts",
           tool: "open_customer",
-          arguments: { id: { bind: { stepIndex: 0 } } },
+          arguments: { id: { bind: { stepIndex: 1 } } },
         },
       ],
     });
     expect(prepared.ok).toBe(true);
     if (prepared.ok) {
-      expect(prepared.steps[1]?.arguments).toEqual({
-        id: { bind: { stepIndex: 0 } },
+      expect(prepared.steps[2]?.arguments).toEqual({
+        id: { bind: { stepIndex: 1 } },
       });
-      expect(prepared.steps[1]?.readOnly).toBe(true);
+      expect(prepared.steps[2]?.readOnly).toBe(true);
     }
   });
 
@@ -486,6 +496,38 @@ describe("prepareWorkflow", () => {
     if (!prepared.ok) {
       expect(prepared.error.code).toBe("unsupported_graph");
     }
+  });
+
+  it("rejects a copied id for a selected-record open", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "open_customer",
+          arguments: { id: "customer_1" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(false);
+  });
+
+  it("allows an explicit direct-id record open", () => {
+    const prepared = prepareWorkflow({
+      state: createInitialRuntimeState(account),
+      workflowId: "wf_1",
+      origins,
+      steps: [
+        {
+          providerId: "accounts",
+          tool: "open_customer_by_id",
+          arguments: { id: "customer_1" },
+        },
+      ],
+    });
+    expect(prepared.ok).toBe(true);
   });
 
   it("freezes a create step as a write", () => {

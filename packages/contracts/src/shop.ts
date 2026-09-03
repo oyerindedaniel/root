@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { bindQuerySchema, portableReferenceSchema } from "./portable-reference.js";
+import { bindQuerySchema } from "./portable-reference.js";
 
 export const searchProductsInputSchema = z.strictObject({
   query: z.string().min(1).max(120),
@@ -21,8 +21,6 @@ export const searchProductsOutputSchema = z.object({
   status: z.literal("success"),
   query: z.string().min(1).max(120),
   products: z.array(shopProductSchema).max(12),
-  selectedId: z.string().min(1).max(64).optional(),
-  selected: portableReferenceSchema.optional(),
 });
 
 export type SearchProductsOutput = z.infer<typeof searchProductsOutputSchema>;
@@ -34,12 +32,14 @@ export const productIdInputSchema = z.strictObject({
 export type ProductIdInput = z.infer<typeof productIdInputSchema>;
 
 export const openProductProposedArgumentsSchema = z.strictObject({
-  id: z.union([z.string().min(1).max(64), bindQuerySchema]),
+  id: bindQuerySchema,
 });
 
 export type OpenProductProposedArguments = z.infer<
   typeof openProductProposedArgumentsSchema
 >;
+
+export const openProductByIdProposedArgumentsSchema = productIdInputSchema;
 
 export const openProductOutputSchema = z.object({
   status: z.literal("success"),
@@ -79,7 +79,7 @@ export const OPEN_PRODUCT_INPUT_SCHEMA = {
   properties: {
     id: {
       type: "string",
-      description: "Product id, or bind an earlier selected snapshot.",
+      description: "Product id resolved from an earlier selected snapshot.",
     },
   },
   required: ["id"],

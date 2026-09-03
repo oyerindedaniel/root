@@ -1,8 +1,9 @@
 import { z } from "zod";
 
-import { searchCasesProposedArgumentsSchema, searchCasesOutputSchema, openCaseProposedArgumentsSchema, openCaseOutputSchema, createCaseInputSchema, createCaseOutputSchema } from "./cases.js";
-import { searchCustomersInputSchema, searchCustomersOutputSchema, openCustomerProposedArgumentsSchema, openCustomerOutputSchema, createCustomerInputSchema, createCustomerOutputSchema } from "./customers.js";
-import { searchProductsInputSchema, searchProductsOutputSchema, openProductProposedArgumentsSchema, openProductOutputSchema, createProductInputSchema, createProductOutputSchema } from "./shop.js";
+import { searchCasesProposedArgumentsSchema, searchCasesOutputSchema, openCaseByIdProposedArgumentsSchema, openCaseProposedArgumentsSchema, openCaseOutputSchema, createCaseInputSchema, createCaseOutputSchema } from "./cases.js";
+import { searchCustomersInputSchema, searchCustomersOutputSchema, openCustomerByIdProposedArgumentsSchema, openCustomerProposedArgumentsSchema, openCustomerOutputSchema, createCustomerInputSchema, createCustomerOutputSchema } from "./customers.js";
+import { searchProductsInputSchema, searchProductsOutputSchema, openProductByIdProposedArgumentsSchema, openProductProposedArgumentsSchema, openProductOutputSchema, createProductInputSchema, createProductOutputSchema } from "./shop.js";
+import { selectResultOutputSchema, selectResultProposedArgumentsSchema } from "./portable-reference.js";
 import {
   contractVersionSchema,
   gatewayErrorCodeSchema,
@@ -10,6 +11,7 @@ import {
   normalizedToolDescriptorSchema,
   originSchema,
   providerIdSchema,
+  builtinProviderIdSchema,
   webmcpToolNameSchema,
 } from "./webmcp.js";
 
@@ -55,19 +57,23 @@ export const providerPlacementSchema = z.enum(["stage", "tray"]);
 
 export type ProviderPlacement = z.infer<typeof providerPlacementSchema>;
 
-export const builtinProviderIdSchema = z.enum(["accounts", "shop", "support"]);
-
-export type BuiltinProviderId = z.infer<typeof builtinProviderIdSchema>;
+export type { BuiltinProviderId } from "./webmcp.js";
 
 export const PASS_READ_TOOL_NAMES = [
   "accounts.search_customers",
+  "accounts.select_result",
   "accounts.open_customer",
+  "accounts.open_customer_by_id",
   "accounts.create_customer",
   "shop.search_products",
+  "shop.select_result",
   "shop.open_product",
+  "shop.open_product_by_id",
   "shop.create_product",
   "support.search_cases",
+  "support.select_result",
   "support.open_case",
+  "support.open_case_by_id",
   "support.create_case",
 ] as const;
 
@@ -170,13 +176,41 @@ export const proposedCaseCreateStepSchema = z.strictObject({
   arguments: createCaseInputSchema,
 });
 
-export const proposedWorkflowStepSchema = z.discriminatedUnion("tool", [
+export const proposedCustomerOpenByIdStepSchema = z.strictObject({ providerId: z.literal("accounts"), tool: z.literal("open_customer_by_id"), arguments: openCustomerByIdProposedArgumentsSchema });
+export const proposedProductOpenByIdStepSchema = z.strictObject({ providerId: z.literal("shop"), tool: z.literal("open_product_by_id"), arguments: openProductByIdProposedArgumentsSchema });
+export const proposedCaseOpenByIdStepSchema = z.strictObject({ providerId: z.literal("support"), tool: z.literal("open_case_by_id"), arguments: openCaseByIdProposedArgumentsSchema });
+
+export const proposedCustomerSelectStepSchema = z.strictObject({
+  providerId: z.literal("accounts"),
+  tool: z.literal("select_result"),
+  arguments: selectResultProposedArgumentsSchema,
+});
+
+export const proposedProductSelectStepSchema = z.strictObject({
+  providerId: z.literal("shop"),
+  tool: z.literal("select_result"),
+  arguments: selectResultProposedArgumentsSchema,
+});
+
+export const proposedCaseSelectStepSchema = z.strictObject({
+  providerId: z.literal("support"),
+  tool: z.literal("select_result"),
+  arguments: selectResultProposedArgumentsSchema,
+});
+
+export const proposedWorkflowStepSchema = z.union([
   proposedCustomerSearchStepSchema,
   proposedProductSearchStepSchema,
   proposedCaseSearchStepSchema,
+  proposedCustomerSelectStepSchema,
+  proposedProductSelectStepSchema,
+  proposedCaseSelectStepSchema,
   proposedCustomerOpenStepSchema,
   proposedProductOpenStepSchema,
   proposedCaseOpenStepSchema,
+  proposedCustomerOpenByIdStepSchema,
+  proposedProductOpenByIdStepSchema,
+  proposedCaseOpenByIdStepSchema,
   proposedCustomerCreateStepSchema,
   proposedProductCreateStepSchema,
   proposedCaseCreateStepSchema,
@@ -288,15 +322,40 @@ export const preparedCaseCreateStepSchema = z.object({
   readOnly: z.literal(false),
 });
 
+export const preparedCustomerOpenByIdStepSchema = z.object({ providerId: z.literal("accounts"), origin: originSchema, toolName: z.literal("open_customer_by_id"), namespacedName: z.literal("accounts.open_customer_by_id"), schemaFingerprint: z.string().min(1).nullable(), arguments: openCustomerByIdProposedArgumentsSchema, readOnly: z.literal(true) });
+export const preparedProductOpenByIdStepSchema = z.object({ providerId: z.literal("shop"), origin: originSchema, toolName: z.literal("open_product_by_id"), namespacedName: z.literal("shop.open_product_by_id"), schemaFingerprint: z.string().min(1).nullable(), arguments: openProductByIdProposedArgumentsSchema, readOnly: z.literal(true) });
+export const preparedCaseOpenByIdStepSchema = z.object({ providerId: z.literal("support"), origin: originSchema, toolName: z.literal("open_case_by_id"), namespacedName: z.literal("support.open_case_by_id"), schemaFingerprint: z.string().min(1).nullable(), arguments: openCaseByIdProposedArgumentsSchema, readOnly: z.literal(true) });
+
+const preparedSelectStep = (providerId: "accounts" | "shop" | "support") =>
+  z.object({
+    providerId: z.literal(providerId),
+    origin: originSchema,
+    toolName: z.literal("select_result"),
+    namespacedName: z.literal(`${providerId}.select_result`),
+    schemaFingerprint: z.string().min(1).nullable(),
+    arguments: selectResultProposedArgumentsSchema,
+    readOnly: z.literal(true),
+  });
+
+export const preparedCustomerSelectStepSchema = preparedSelectStep("accounts");
+export const preparedProductSelectStepSchema = preparedSelectStep("shop");
+export const preparedCaseSelectStepSchema = preparedSelectStep("support");
+
 export const preparedWorkflowStepSchema = z.discriminatedUnion(
   "namespacedName",
   [
     preparedCustomerSearchStepSchema,
     preparedProductSearchStepSchema,
     preparedCaseSearchStepSchema,
+    preparedCustomerSelectStepSchema,
+    preparedProductSelectStepSchema,
+    preparedCaseSelectStepSchema,
     preparedCustomerOpenStepSchema,
     preparedProductOpenStepSchema,
     preparedCaseOpenStepSchema,
+    preparedCustomerOpenByIdStepSchema,
+    preparedProductOpenByIdStepSchema,
+    preparedCaseOpenByIdStepSchema,
     preparedCustomerCreateStepSchema,
     preparedProductCreateStepSchema,
     preparedCaseCreateStepSchema,
@@ -361,13 +420,38 @@ export const caseCreateResultSchema = z.object({
   data: createCaseOutputSchema,
 });
 
-export const workflowStepResultSchema = z.discriminatedUnion("tool", [
+export const customerOpenByIdResultSchema = z.object({ tool: z.literal("accounts.open_customer_by_id"), data: openCustomerOutputSchema });
+export const productOpenByIdResultSchema = z.object({ tool: z.literal("shop.open_product_by_id"), data: openProductOutputSchema });
+export const caseOpenByIdResultSchema = z.object({ tool: z.literal("support.open_case_by_id"), data: openCaseOutputSchema });
+
+export const customerSelectResultSchema = z.object({
+  tool: z.literal("accounts.select_result"),
+  data: selectResultOutputSchema,
+});
+
+export const productSelectResultSchema = z.object({
+  tool: z.literal("shop.select_result"),
+  data: selectResultOutputSchema,
+});
+
+export const caseSelectResultSchema = z.object({
+  tool: z.literal("support.select_result"),
+  data: selectResultOutputSchema,
+});
+
+export const workflowStepResultSchema = z.union([
   customerSearchResultSchema,
   productSearchResultSchema,
   caseSearchResultSchema,
+  customerSelectResultSchema,
+  productSelectResultSchema,
+  caseSelectResultSchema,
   customerOpenResultSchema,
   productOpenResultSchema,
   caseOpenResultSchema,
+  customerOpenByIdResultSchema,
+  productOpenByIdResultSchema,
+  caseOpenByIdResultSchema,
   customerCreateResultSchema,
   productCreateResultSchema,
   caseCreateResultSchema,

@@ -138,7 +138,7 @@ export function CaseCreate() {
             name="orderRef"
           />
         </Label>
-        <Button type="submit" intent={present.intent}>
+        <Button type="submit" intent={present.intent} approval={present.intent}>
           Create
         </Button>
       </form>

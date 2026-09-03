@@ -5,6 +5,7 @@ import { requirePublicEnv } from "@repo/api-client/env";
 import {
   CREATE_CUSTOMER_INPUT_SCHEMA,
   OPEN_CUSTOMER_INPUT_SCHEMA,
+  SELECT_RESULT_INPUT_SCHEMA,
   SEARCH_CUSTOMERS_INPUT_SCHEMA,
   createCustomerInputSchema,
   createCustomerOutputSchema,
@@ -13,6 +14,8 @@ import {
   openCustomerOutputSchema,
   parseToolExecuteInput,
   portableCustomerReference,
+  selectResultOutputSchema,
+  selectResultToolInputSchema,
   searchCustomersInputSchema,
   searchCustomersOutputSchema,
 } from "@repo/contracts";
@@ -36,6 +39,7 @@ const rootOrigin = requirePublicEnv(
 type SearchSurface = {
   queryInput: HTMLInputElement | null;
   setQuery: (value: string) => void;
+  getCustomers: () => ReturnType<typeof searchCustomersOutputSchema.parse>["customers"];
   runSearch: (
     query: string,
     signal?: AbortSignal,
@@ -205,26 +209,8 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
             const submitted =
               search.queryInput?.value ?? filled?.text ?? parsed.query;
             const result = await search.runSearch(submitted, signal);
-            const selectedId = await present.waitForSelect({
-              candidateId: result.customers[0]?.id ?? null,
-              signal,
-            });
-            const hit = result.customers.find(
-              (customer) => customer.id === selectedId,
-            );
-            present.commit(selectedId ?? result.customers[0]?.id ?? null);
-            return {
-              ...result,
-              ...(selectedId ? { selectedId } : {}),
-              ...(hit
-                ? {
-                    selected: portableCustomerReference(
-                      hit,
-                      new Date().toISOString(),
-                    ),
-                  }
-                : {}),
-            };
+            present.commit(null);
+            return result;
           } catch (caught) {
             present.commit(null);
             throw caught;
@@ -237,6 +223,43 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
         exposedTo: [rootOrigin],
         signal: controller.signal,
       },
+    );
+    void modelContext.registerTool(
+      {
+        name: "select_result",
+        title: "Select customer",
+        description: "Selects one customer from the current search results.",
+        inputSchema: SELECT_RESULT_INPUT_SCHEMA,
+        annotations: { readOnlyHint: true, untrustedContentHint: false },
+        execute: async (input, options) => {
+          const signal = options?.signal ?? controller.signal;
+          const parsed = selectResultToolInputSchema.parse(parseToolExecuteInput(input));
+          const source = searchCustomersOutputSchema.parse(parsed.source);
+          const search = await searchSlot.waitUntil(() => true, signal);
+          const customers = search.getCustomers();
+          if (customers.length !== source.customers.length || source.customers.some((customer) => !customers.some((item) => item.id === customer.id))) {
+            throw new Error("The selected source collection is no longer current.");
+          }
+          const candidate = customers[0];
+          if (!candidate) {
+            throw new Error("The source collection has no selectable customer.");
+          }
+          present.arm();
+          try {
+            const selectedId = customers.length === 1 ? candidate.id : await present.waitForSelect({ candidateId: candidate.id, signal });
+            const selected = customers.find((customer) => customer.id === selectedId);
+            if (!selected || !source.customers.some((customer) => customer.id === selected.id)) {
+              throw new Error("The chosen customer is not in the source collection.");
+            }
+            present.commit(selected.id);
+            return selectResultOutputSchema.parse({ selected: portableCustomerReference(selected, new Date().toISOString()) });
+          } catch (caught) {
+            present.commit(null);
+            throw caught;
+          }
+        },
+      },
+      { exposedTo: [rootOrigin], signal: controller.signal },
     );
     void modelContext.registerTool(
       {
@@ -268,6 +291,24 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
         exposedTo: [rootOrigin],
         signal: controller.signal,
       },
+    );
+    void modelContext.registerTool(
+      {
+        name: "open_customer_by_id",
+        title: "Open customer by id",
+        description: "Opens a customer record using an explicit customer id.",
+        inputSchema: OPEN_CUSTOMER_INPUT_SCHEMA,
+        annotations: { readOnlyHint: true, untrustedContentHint: false },
+        execute: async (input, options) => {
+          const signal = options?.signal ?? controller.signal;
+          const parsed = customerIdInputSchema.parse(parseToolExecuteInput(input));
+          const result = openCustomerOutputSchema.parse(await trpcClient.v1.accounts.getCustomer.query(parsed, { signal }));
+          routerRef.current.push(`/customers/${result.customer.id}`);
+          await detailSlot.waitUntil((surface) => surface.id === result.customer.id, signal);
+          return result;
+        },
+      },
+      { exposedTo: [rootOrigin], signal: controller.signal },
     );
     void modelContext.registerTool(
       {

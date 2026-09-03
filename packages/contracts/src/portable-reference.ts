@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { builtinProviderIdSchema } from "./webmcp.js";
+
 import type { SupportCase } from "./cases.js";
 import type { Customer } from "./customers.js";
 import type { ShopProduct } from "./shop.js";
@@ -13,7 +15,7 @@ export const portableEntityTypeSchema = z.enum([
 export type PortableEntityType = z.infer<typeof portableEntityTypeSchema>;
 
 export const portableReferenceSchema = z.strictObject({
-  sourceProvider: z.enum(["accounts", "shop", "support"]),
+  sourceProvider: builtinProviderIdSchema,
   entityType: portableEntityTypeSchema,
   sourceId: z.string().min(1).max(64),
   displayName: z.string().min(1).max(160),
@@ -37,6 +39,23 @@ export const bindQuerySchema = z
   );
 
 export type BindQuery = z.infer<typeof bindQuerySchema>;
+
+export const selectResultProposedArgumentsSchema = z.strictObject({
+  source: bindQuerySchema,
+});
+
+export const selectResultToolInputSchema = z.strictObject({
+  source: z.unknown(),
+});
+
+export const selectResultOutputSchema = z.strictObject({
+  selected: portableReferenceSchema,
+});
+
+export const SELECT_RESULT_INPUT_SCHEMA = z.toJSONSchema(
+  selectResultToolInputSchema,
+  { target: "draft-07", io: "input" },
+);
 
 export const searchQueryTextSchema = z.string().min(1).max(120);
 

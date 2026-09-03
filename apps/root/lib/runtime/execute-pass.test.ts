@@ -80,9 +80,19 @@ const customerOutput = {
       email: "ada@localhost",
     },
   ],
-  selectedId: "customer_1",
-  selected: adaReference,
 };
+
+const customerSelectionStep: PreparedWorkflowStep = {
+  providerId: "accounts",
+  origin: origins.accounts,
+  toolName: "select_result",
+  namespacedName: "accounts.select_result",
+  schemaFingerprint: null,
+  arguments: { source: { bind: { stepIndex: 0 } } },
+  readOnly: true,
+};
+
+const customerSelectionOutput = { selected: adaReference };
 
 const caseStep: PreparedWorkflowStep = {
   providerId: "support",
@@ -90,7 +100,7 @@ const caseStep: PreparedWorkflowStep = {
   toolName: "search_cases",
   namespacedName: "support.search_cases",
   schemaFingerprint: null,
-  arguments: { query: { bind: { stepIndex: 0 } } },
+  arguments: { query: { bind: { stepIndex: 1 } } },
   readOnly: true,
 };
 
@@ -115,7 +125,7 @@ const openCustomerStep: PreparedWorkflowStep = {
   toolName: "open_customer",
   namespacedName: "accounts.open_customer",
   schemaFingerprint: null,
-  arguments: { id: { bind: { stepIndex: 0 } } },
+  arguments: { id: { bind: { stepIndex: 1 } } },
   readOnly: true,
 };
 
@@ -225,6 +235,9 @@ function createHarness(steps: PreparedWorkflowStep[]) {
       }
       if (options.tool.name === "open_customer") {
         return JSON.stringify(openCustomerOutput);
+      }
+      if (options.tool.name === "select_result") {
+        return JSON.stringify(customerSelectionOutput);
       }
       return JSON.stringify(customerOutput);
     },
@@ -500,39 +513,37 @@ describe("executePass", () => {
   });
 
   it("delivers the earlier selected snapshot intact to a bound Cases step", async () => {
-    const harness = createHarness([customerStep, caseStep]);
+    const harness = createHarness([customerStep, customerSelectionStep, caseStep]);
     const result = await run(harness);
 
     expect(result.status).toBe("success");
-    expect(harness.executeTool.mock.calls[1]?.[0]?.input).toEqual({
+    expect(harness.executeTool.mock.calls[2]?.[0]?.input).toEqual({
       query: adaReference,
     });
-    expect(harness.executeTool.mock.calls[1]?.[0]?.input).not.toEqual({
+    expect(harness.executeTool.mock.calls[2]?.[0]?.input).not.toEqual({
       query: "ada@localhost",
     });
   });
 
   it("delivers the earlier selected sourceId to a bound open step", async () => {
-    const harness = createHarness([customerStep, openCustomerStep]);
+    const harness = createHarness([customerStep, customerSelectionStep, openCustomerStep]);
     const result = await run(harness);
 
     expect(result.status).toBe("success");
-    expect(harness.executeTool.mock.calls[1]?.[0]?.input).toEqual({
+    expect(harness.executeTool.mock.calls[2]?.[0]?.input).toEqual({
       id: "customer_1",
     });
   });
 
   it("fails when a bound Cases step has no selected snapshot", async () => {
-    const harness = createHarness([customerStep, caseStep]);
+    const harness = createHarness([customerStep, customerSelectionStep, caseStep]);
     harness.executeTool.mockImplementation(async (options) => {
       return JSON.stringify(
         options.tool.name === "search_customers"
-          ? {
-              status: "success",
-              query: "ada",
-              customers: customerOutput.customers,
-            }
-          : caseOutput,
+          ? customerOutput
+          : options.tool.name === "select_result"
+            ? {}
+            : caseOutput,
       );
     });
 
@@ -541,6 +552,6 @@ describe("executePass", () => {
     expect(result.status === "error" ? result.code : null).toBe(
       "execution_failed",
     );
-    expect(harness.executeTool).toHaveBeenCalledTimes(1);
+    expect(harness.executeTool).toHaveBeenCalledTimes(2);
   });
 });

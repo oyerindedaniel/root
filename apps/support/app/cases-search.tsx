@@ -69,6 +69,7 @@ export function CasesSearch() {
         return queryInputRef.current;
       },
       setQuery,
+      getCases: () => cases,
       setBoundAsk,
       showEmptyBound: () => {
         setCases([]);
@@ -76,7 +77,7 @@ export function CasesSearch() {
       },
       runSearch,
     });
-  }, [registerSearch, runSearch]);
+  }, [cases, registerSearch, runSearch]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
@@ -140,11 +141,10 @@ export function CasesSearch() {
         <PresentAsk>{boundAsk ?? "Pick a case"}</PresentAsk>
       ) : null}
       <ul className="flex flex-col gap-3">
-        {cases.map((supportCase, index) => (
+        {cases.map((supportCase) => (
           <SearchHit
             key={supportCase.id}
-            ref={index === 0 ? present.firstHitRef : undefined}
-            revealed={present.hitId === supportCase.id}
+            revealed={present.choosing && present.hitId === supportCase.id}
             onSelect={
               present.choosing
                 ? () => present.choose(supportCase.id)

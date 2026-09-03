@@ -68,9 +68,10 @@ export function CustomerSearch() {
         return queryInputRef.current;
       },
       setQuery,
+      getCustomers: () => customers,
       runSearch,
     });
-  }, [registerSearch, runSearch]);
+  }, [customers, registerSearch, runSearch]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
@@ -135,11 +136,10 @@ export function CustomerSearch() {
       ) : null}
       {present.choosing ? <PresentAsk>Pick a customer</PresentAsk> : null}
       <ul className="flex flex-col gap-3">
-        {customers.map((customer, index) => (
+        {customers.map((customer) => (
           <SearchHit
             key={customer.id}
-            ref={index === 0 ? present.firstHitRef : undefined}
-            revealed={present.hitId === customer.id}
+            revealed={present.choosing && present.hitId === customer.id}
             onSelect={
               present.choosing
                 ? () => present.choose(customer.id)

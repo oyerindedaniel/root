@@ -38,21 +38,6 @@ export function WorkspaceSettingsPanel() {
       />
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm">Auto-select results</p>
-          <p className="text-xs text-white/45">
-            Choose the first search result after the preview.
-          </p>
-        </div>
-        <Switch
-          checked={library.preferences.selectionMode === "auto"}
-          aria-label="Auto-select results"
-          onCheckedChange={(checked) =>
-            library.setSelectionMode(checked ? "auto" : "manual")
-          }
-        />
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
           <p className="text-sm">Notify when a wait needs you</p>
           <p className="text-xs text-white/45">
             When this tab is hidden and the agent is waiting for a click.

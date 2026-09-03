@@ -4,11 +4,9 @@ import {
   coeditMessage,
   DEFAULT_PRESENT_PACE,
   pendingHumanMessage,
-  parseSelectionModeMessage,
   parsePresentationCancelMessage,
   parsePresentPaceMessage,
   type PresentPace,
-  type SelectionMode,
 } from "@repo/contracts";
 
 import {
@@ -16,7 +14,7 @@ import {
   fillPresentedInput,
   previewHoldMs,
   waitPresent,
-  waitForSelection,
+  waitForChoice,
   type FillPresentResult,
 } from "./lib/fill-input";
 
@@ -60,7 +58,6 @@ export function useToolPresent(options: {
   const presentationAbortRef = useRef(new AbortController());
   const firstHitRef = useRef<HTMLLIElement | null>(null);
   const presentPaceRef = useRef<PresentPace>(DEFAULT_PRESENT_PACE);
-  const selectionModeRef = useRef<SelectionMode>("manual");
   const [hitId, setHitId] = useState<string | null>(null);
   const [intent, setIntent] = useState(false);
   const [choosing, setChoosing] = useState(false);
@@ -102,14 +99,6 @@ export function useToolPresent(options: {
       );
       if (pace) {
         presentPaceRef.current = pace;
-      }
-      const selectionMode = parseSelectionModeMessage(
-        event.data,
-        event.origin,
-        rootOrigin,
-      );
-      if (selectionMode) {
-        selectionModeRef.current = selectionMode;
       }
     };
     window.addEventListener("message", onMessage);
@@ -203,6 +192,7 @@ export function useToolPresent(options: {
       return;
     }
     setIntent(true);
+    setPending(true);
     try {
       await new Promise<void>((resolve, reject) => {
         const signal = presentationSignal(
@@ -233,8 +223,9 @@ export function useToolPresent(options: {
     } finally {
       persistWaiterRef.current = null;
       setIntent(false);
+      setPending(false);
     }
-  }, []);
+  }, [setPending]);
 
   const choose = useCallback((id: string) => {
     chooseRef.current?.(id);
@@ -249,29 +240,18 @@ export function useToolPresent(options: {
       ) {
         return;
       }
-      const selectionMode = selectionModeRef.current;
-      if (selectionMode === "auto") {
-        setHitId(options.candidateId);
-        setIntent(true);
-      } else {
-        setChoosing(true);
-        setHitId(options.candidateId);
-        setCoedit(true);
-        setPending(true);
-      }
+      setChoosing(true);
+      setHitId(options.candidateId);
+      setCoedit(true);
+      setPending(true);
       try {
-        if (selectionMode === "manual") {
-          requestAnimationFrame(() => {
-            firstHitRef.current?.scrollIntoView({
-              behavior: "instant",
-              block: "nearest",
-            });
+        requestAnimationFrame(() => {
+          firstHitRef.current?.scrollIntoView({
+            behavior: "instant",
+            block: "nearest",
           });
-        }
-        return await waitForSelection({
-          selectionMode,
-          candidateId: options.candidateId,
-          autoDelayMs: previewHoldMs(presentPaceRef.current.preview),
+        });
+        return await waitForChoice({
           signal: presentationSignal(
             options.signal,
             presentationAbortRef.current.signal,
@@ -287,13 +267,9 @@ export function useToolPresent(options: {
           },
         });
       } finally {
-        if (selectionMode === "auto") {
-          setIntent(false);
-        } else {
-          setChoosing(false);
-          setCoedit(false);
-          setPending(false);
-        }
+        setChoosing(false);
+        setCoedit(false);
+        setPending(false);
       }
     },
     [setCoedit, setPending],

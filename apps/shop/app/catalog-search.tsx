@@ -66,9 +66,10 @@ export function CatalogSearch() {
         return queryInputRef.current;
       },
       setQuery,
+      getProducts: () => products,
       runSearch,
     });
-  }, [registerSearch, runSearch]);
+  }, [products, registerSearch, runSearch]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-8 p-10">
@@ -130,11 +131,10 @@ export function CatalogSearch() {
       ) : null}
       {present.choosing ? <PresentAsk>Pick a product</PresentAsk> : null}
       <ul className="flex flex-col gap-3">
-        {products.map((product, index) => (
+        {products.map((product) => (
           <SearchHit
             key={product.id}
-            ref={index === 0 ? present.firstHitRef : undefined}
-            revealed={present.hitId === product.id}
+            revealed={present.choosing && present.hitId === product.id}
             onSelect={
               present.choosing
                 ? () => present.choose(product.id)

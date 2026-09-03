@@ -3,7 +3,6 @@ import {
   DEFAULT_PRESENT_PACE,
   MAX_PROVIDER_TOOLS,
   presentPaceSchema,
-  selectionModeSchema,
   webmcpToolNameSchema,
 } from "@repo/contracts";
 
@@ -60,8 +59,6 @@ export const workspacePanelSchema = z.strictObject({
 
 export type WorkspacePanel = z.infer<typeof workspacePanelSchema>;
 
-export const DEFAULT_SELECTION_MODE = "manual" as const;
-
 export const DEFAULT_WORKSPACE_PANEL: WorkspacePanel = {
   tab: "activity",
   appsScrollTop: 0,
@@ -74,7 +71,6 @@ export const workspacePreferencesSchema = z
     dock: z.array(dockReferenceSchema).max(MAX_DOCK_APPS),
     panel: workspacePanelSchema.default(DEFAULT_WORKSPACE_PANEL),
     present: presentPaceSchema.default(DEFAULT_PRESENT_PACE),
-    selectionMode: selectionModeSchema.default(DEFAULT_SELECTION_MODE),
     notifyWait: z.boolean().default(false),
   })
   .superRefine((preferences, context) => {
@@ -118,7 +114,6 @@ export function createDefaultWorkspacePreferences(): WorkspacePreferences {
     dock: DEFAULT_DOCK.map((reference) => ({ ...reference })),
     panel: { ...DEFAULT_WORKSPACE_PANEL },
     present: { ...DEFAULT_PRESENT_PACE },
-    selectionMode: DEFAULT_SELECTION_MODE,
     notifyWait: false,
   };
 }

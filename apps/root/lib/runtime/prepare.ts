@@ -41,6 +41,7 @@ export function prepareWorkflow(options: {
       index,
       state: options.state,
       origins: options.origins,
+      prepared,
     });
     if (!bound.ok) {
       return bound;
@@ -118,6 +119,7 @@ function bindProposedStep(options: {
   index: number;
   state: RuntimeState;
   origins: Record<BuiltinProviderId, string>;
+  prepared: PreparedWorkflowStep[];
 }):
   | { ok: true; step: PreparedWorkflowStep }
   | { ok: false; error: BoundedError } {
@@ -132,36 +134,53 @@ function bindProposedStep(options: {
     };
   }
   const proposed = binding.proposed;
+  const passTool = getPassReadTool(
+    namespacedToolName(proposed.providerId, proposed.tool),
+  );
+  if (!passTool) {
+    return unsupportedGraph();
+  }
+  const source = Reflect.get(proposed.arguments, "source");
+  if (isBindQuery(source)) {
+    const previous = options.index > source.bind.stepIndex
+      ? options.prepared[source.bind.stepIndex]
+      : undefined;
+    const previousTool = previous
+      ? getPassReadTool(previous.namespacedName)
+      : undefined;
+    if (
+      passTool.role !== "selection" ||
+      !previous ||
+      !previousTool ||
+      previous.providerId !== proposed.providerId ||
+      previousTool.role !== "collection" ||
+      previousTool.entityType !== passTool.entityType
+    ) {
+      return unsupportedGraph();
+    }
+  }
   const query = Reflect.get(proposed.arguments, "query");
   if (isBindQuery(query)) {
-    if (
-      proposed.tool !== "search_cases" ||
-      query.bind.stepIndex >= options.index
-    ) {
-      return {
-        ok: false,
-        error: boundedError(
-          "unsupported_graph",
-          "Each step needs an allowlisted provider, tool, and arguments.",
-        ),
-      };
+    const previous = options.index > query.bind.stepIndex
+      ? options.prepared[query.bind.stepIndex]
+      : undefined;
+    const previousTool = previous
+      ? getPassReadTool(previous.namespacedName)
+      : undefined;
+    if (!passTool.acceptsSelection || !previousTool || previousTool.role !== "selection") {
+      return unsupportedGraph();
     }
   }
   const id = Reflect.get(proposed.arguments, "id");
   if (isBindQuery(id)) {
-    if (
-      (proposed.tool !== "open_customer" &&
-        proposed.tool !== "open_product" &&
-        proposed.tool !== "open_case") ||
-      id.bind.stepIndex >= options.index
-    ) {
-      return {
-        ok: false,
-        error: boundedError(
-          "unsupported_graph",
-          "Each step needs an allowlisted provider, tool, and arguments.",
-        ),
-      };
+    const previous = options.index > id.bind.stepIndex
+      ? options.prepared[id.bind.stepIndex]
+      : undefined;
+    const previousTool = previous
+      ? getPassReadTool(previous.namespacedName)
+      : undefined;
+    if (passTool.role !== "record" || !previousTool || previousTool.role !== "selection" || previousTool.entityType !== passTool.entityType) {
+      return unsupportedGraph();
     }
   }
 
@@ -214,6 +233,16 @@ function bindProposedStep(options: {
   return {
     ok: true,
     step: binding.freeze(origin, schemaFingerprint),
+  };
+}
+
+function unsupportedGraph() {
+  return {
+    ok: false as const,
+    error: boundedError(
+      "unsupported_graph",
+      "Each step needs an allowlisted provider, tool, and arguments.",
+    ),
   };
 }
 
