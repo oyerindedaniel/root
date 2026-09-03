@@ -1,4 +1,8 @@
+import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { buttonVariants } from "@repo/ui/button";
+import { cn } from "@repo/ui/lib/cn";
 
 import { SignInForm } from "@/components/auth/sign-in-form";
 import { SignInProviderPattern } from "@/components/auth/sign-in-provider-pattern";
@@ -13,8 +17,15 @@ export default async function SignInPage() {
 
   preloadDesktopAssets();
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+    <div className="relative flex h-dvh flex-col overflow-hidden bg-background">
       <SignInProviderPattern />
+      <Link
+        href="/"
+        className={cn(buttonVariants({ variant: "ghost" }), "absolute top-6 left-6")}
+      >
+        <ArrowLeftIcon className="size-4" />
+        Back
+      </Link>
       <main className="mx-auto flex min-h-0 w-full max-w-sm flex-1 flex-col justify-center gap-6 p-6">
         <header className="flex flex-col items-center gap-3">
           <img
