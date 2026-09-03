@@ -8,6 +8,7 @@ import {
   parseCoeditMessage,
   parsePendingHumanMessage,
   PENDING_HUMAN_TIMEOUT_MS,
+  presentationCancelMessage,
   presentPaceMessage,
   type Account,
   type BoundedError,
@@ -1071,6 +1072,7 @@ function ProviderWindowHost({
 }) {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const iframeLoadedRef = useRef(false);
   const [windowSession] = useState(createWindowSession);
   const [coeditOpen, setCoeditOpen] = useState(false);
   if (windowState.control !== "agent" && coeditOpen) {
@@ -1081,6 +1083,9 @@ function ProviderWindowHost({
   const layoutRafRef = useRef(0);
   const provider = getProvider(catalog, windowState.providerId);
   const bindIframe = useCallback((iframe: HTMLIFrameElement | null) => {
+    if (iframeRef.current !== iframe) {
+      iframeLoadedRef.current = false;
+    }
     iframeRef.current = iframe;
   }, []);
   const placementMotion =
@@ -1272,6 +1277,9 @@ function ProviderWindowHost({
   useEffect(() => () => windowSession.unbind(), [windowSession]);
 
   useEffect(() => {
+    if (!iframeLoadedRef.current) {
+      return;
+    }
     postDocumentHostState(
       iframeRef.current,
       windowState.origin,
@@ -1344,7 +1352,13 @@ function ProviderWindowHost({
       }}
       leased={windowState.control === "agent"}
       coeditOpen={coeditOpen}
-      onTakeControl={() => onTakeControl(windowState.instanceId)}
+      onTakeControl={() => {
+        iframeRef.current?.contentWindow?.postMessage(
+          presentationCancelMessage(),
+          windowState.origin,
+        );
+        onTakeControl(windowState.instanceId);
+      }}
     >
       <iframe
         ref={bindIframe}
@@ -1354,6 +1368,7 @@ function ProviderWindowHost({
         className="size-full border-0"
         onFocus={() => onFocus(windowState.instanceId)}
         onLoad={() => {
+          iframeLoadedRef.current = true;
           setCoeditOpen(false);
           onHumanPending(windowState.instanceId, false);
           postDocumentHostState(

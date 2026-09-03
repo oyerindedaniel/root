@@ -11,7 +11,10 @@ import {
   type RefObject,
 } from "react";
 
-import { TakeControlOverlay } from "@/components/workspace/take-control-overlay";
+import {
+  TakeControlButton,
+  TakeControlOverlay,
+} from "@/components/workspace/take-control-overlay";
 import type { ResizeEdge } from "@/lib/window/frame";
 import type { WindowSession } from "@/lib/window/session";
 
@@ -126,13 +129,17 @@ export function AppWindowRoot({
         <p className="min-w-0 truncate text-sm font-medium text-foreground">
           {title}
         </p>
+        {showTakeControl && coeditOpen && onTakeControl ? (
+          <div className="ml-auto shrink-0">
+            <TakeControlButton compact onTakeControl={onTakeControl} />
+          </div>
+        ) : null}
       </div>
       <div className="app-scroll relative min-h-0 min-w-0 flex-1">
         {children}
-        {showTakeControl && onTakeControl ? (
+        {showTakeControl && !coeditOpen && onTakeControl ? (
           <TakeControlOverlay
             pointerInside={pointerInside}
-            passThrough={coeditOpen}
             onTakeControl={onTakeControl}
           />
         ) : null}

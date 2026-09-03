@@ -39,6 +39,12 @@ export async function discoverTools(options: {
     const tools = await options.modelContext.getTools({
       fromOrigins: [options.origin],
     });
+    if (!Array.isArray(tools)) {
+      throw new GatewayError(
+        "discovery_failed",
+        "Capability discovery failed.",
+      );
+    }
     return tools.filter((tool) => {
       if (tool.origin !== options.origin) {
         return false;

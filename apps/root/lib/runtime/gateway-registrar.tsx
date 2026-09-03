@@ -105,7 +105,6 @@ export async function registerGatewayTools(
   if (!context) {
     return;
   }
-
   await context.registerTool(
     {
       name: "list_providers",

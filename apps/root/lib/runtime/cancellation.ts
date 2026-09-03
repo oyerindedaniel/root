@@ -65,7 +65,7 @@ export function abortErrorCode(
 
 export function abortErrorMessage(code: AbortErrorCode, subject: string) {
   if (code === STOPPED_BY_USER) {
-    return `${subject} was stopped by the user.`;
+    return "The human took control. Do not retry this workflow.";
   }
   if (code === NO_RESPONSE) {
     return `${subject} had no human response.`;

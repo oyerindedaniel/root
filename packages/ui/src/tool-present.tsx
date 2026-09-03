@@ -4,6 +4,7 @@ import {
   coeditMessage,
   DEFAULT_PRESENT_PACE,
   pendingHumanMessage,
+  parsePresentationCancelMessage,
   parsePresentPaceMessage,
   type PresentPace,
 } from "@repo/contracts";
@@ -33,6 +34,13 @@ function abortError(signal?: AbortSignal) {
   return new DOMException("Aborted", "AbortError");
 }
 
+function presentationSignal(
+  signal: AbortSignal | undefined,
+  presentation: AbortSignal,
+) {
+  return signal ? AbortSignal.any([signal, presentation]) : presentation;
+}
+
 export function useToolPresent(options: {
   rootOrigin: string;
   gate: ToolPresentGate;
@@ -47,6 +55,7 @@ export function useToolPresent(options: {
   } | null>(null);
   const chooseRef = useRef<(id: string) => void>(undefined);
   const pendingPostedRef = useRef(false);
+  const presentationAbortRef = useRef(new AbortController());
   const firstHitRef = useRef<HTMLLIElement | null>(null);
   const presentPaceRef = useRef<PresentPace>(DEFAULT_PRESENT_PACE);
   const [hitId, setHitId] = useState<string | null>(null);
@@ -60,6 +69,29 @@ export function useToolPresent(options: {
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       gateRef.current.applyMessage(event.data, event.origin, rootOrigin);
+      if (
+        parsePresentationCancelMessage(
+          event.data,
+          event.origin,
+          rootOrigin,
+        )
+      ) {
+        presentationAbortRef.current.abort(
+          new DOMException("stopped_by_user", "AbortError"),
+        );
+        armedRef.current = false;
+        setHitId(null);
+        setIntent(false);
+        setChoosing(false);
+        if (coeditPostedRef.current) {
+          window.parent.postMessage(coeditMessage(false), rootOrigin);
+          coeditPostedRef.current = false;
+        }
+        if (pendingPostedRef.current) {
+          window.parent.postMessage(pendingHumanMessage(false), rootOrigin);
+          pendingPostedRef.current = false;
+        }
+      }
       const pace = parsePresentPaceMessage(
         event.data,
         event.origin,
@@ -88,6 +120,10 @@ export function useToolPresent(options: {
   }, [hitId, choosing]);
 
   const arm = useCallback(() => {
+    presentationAbortRef.current.abort(
+      new DOMException("Superseded", "AbortError"),
+    );
+    presentationAbortRef.current = new AbortController();
     armedRef.current = gateRef.current.shouldPresent();
   }, []);
 
@@ -158,13 +194,16 @@ export function useToolPresent(options: {
     setIntent(true);
     try {
       await new Promise<void>((resolve, reject) => {
-        const signal = options?.signal;
-        if (signal?.aborted) {
+        const signal = presentationSignal(
+          options?.signal,
+          presentationAbortRef.current.signal,
+        );
+        if (signal.aborted) {
           reject(abortError(signal));
           return;
         }
         const dispose = () => {
-          signal?.removeEventListener("abort", onAbort);
+          signal.removeEventListener("abort", onAbort);
         };
         const onAbort = () => {
           persistWaiterRef.current = null;
@@ -178,7 +217,7 @@ export function useToolPresent(options: {
           },
           dispose,
         };
-        signal?.addEventListener("abort", onAbort, { once: true });
+        signal.addEventListener("abort", onAbort, { once: true });
       });
     } finally {
       persistWaiterRef.current = null;
@@ -211,7 +250,10 @@ export function useToolPresent(options: {
           });
         });
         return await waitForChoice({
-          signal: options.signal,
+          signal: presentationSignal(
+            options.signal,
+            presentationAbortRef.current.signal,
+          ),
           bind: (chooseId) => {
             chooseRef.current = (id) => {
               setHitId(id);
@@ -248,7 +290,10 @@ export function useToolPresent(options: {
         text: options.text,
         setValue: options.setValue,
         input: options.input,
-        signal: options.signal,
+        signal: presentationSignal(
+          options.signal,
+          presentationAbortRef.current.signal,
+        ),
         instant,
         paceMs: fillPaceMs(options.text.length, presentPaceRef.current.fill),
       });
@@ -267,7 +312,10 @@ export function useToolPresent(options: {
     try {
       await waitPresent(
         previewHoldMs(presentPaceRef.current.preview),
-        options?.signal,
+        presentationSignal(
+          options?.signal,
+          presentationAbortRef.current.signal,
+        ),
       );
     } finally {
       setIntent(false);
