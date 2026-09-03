@@ -11,7 +11,6 @@ import {
   normalizedToolDescriptorSchema,
   originSchema,
   providerIdSchema,
-  builtinProviderIdSchema,
   webmcpToolNameSchema,
 } from "./webmcp.js";
 
@@ -56,8 +55,6 @@ export type WorkflowLifecycle = z.infer<typeof workflowLifecycleSchema>;
 export const providerPlacementSchema = z.enum(["stage", "tray"]);
 
 export type ProviderPlacement = z.infer<typeof providerPlacementSchema>;
-
-export type { BuiltinProviderId } from "./webmcp.js";
 
 export const PASS_READ_TOOL_NAMES = [
   "accounts.search_customers",
