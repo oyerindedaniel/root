@@ -10,6 +10,7 @@ import {
   PENDING_HUMAN_TIMEOUT_MS,
   presentationCancelMessage,
   presentPaceMessage,
+  selectionModeMessage,
   type Account,
   type BoundedError,
   type BoundedResultEnvelope,
@@ -134,6 +135,7 @@ function postDocumentHostState(
   origin: string,
   placement: ProviderPlacement,
   presentPace: PresentPace,
+  selectionMode: "manual" | "auto",
 ) {
   const contentWindow = frame?.contentWindow;
   if (!contentWindow) {
@@ -144,6 +146,7 @@ function postDocumentHostState(
     origin,
   );
   contentWindow.postMessage(presentPaceMessage(presentPace), origin);
+  contentWindow.postMessage(selectionModeMessage(selectionMode), origin);
 }
 
 export function RuntimeProvider({
@@ -1000,6 +1003,7 @@ export function RuntimeProvider({
                 onSessionUnbind={unbindWindowSession}
                 onTakePendingFill={takePendingFill}
                 presentPace={preferences.present}
+                selectionMode={preferences.selectionMode}
               />
             ) : null;
           })}
@@ -1045,6 +1049,7 @@ function ProviderWindowHost({
   onSessionUnbind,
   onTakePendingFill,
   presentPace,
+  selectionMode,
 }: {
   windowState: ProviderWindow;
   catalog: ProviderCatalog;
@@ -1069,6 +1074,7 @@ function ProviderWindowHost({
   onSessionUnbind: (instanceId: string) => void;
   onTakePendingFill: (instanceId: string) => boolean;
   presentPace: PresentPace;
+  selectionMode: "manual" | "auto";
 }) {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -1285,8 +1291,9 @@ function ProviderWindowHost({
       windowState.origin,
       windowState.placement,
       presentPace,
+      selectionMode,
     );
-  }, [presentPace, windowState.origin, windowState.placement]);
+  }, [presentPace, selectionMode, windowState.origin, windowState.placement]);
 
   useEffect(() => {
     if (windowState.control !== "agent") {
@@ -1376,6 +1383,7 @@ function ProviderWindowHost({
             windowState.origin,
             windowState.placement,
             presentPace,
+            selectionMode,
           );
           onLoad(windowState.instanceId);
         }}

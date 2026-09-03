@@ -5,6 +5,7 @@ import {
   TOOL_PRESENT_PREVIEW_MS,
   waitPresent,
   waitForChoice,
+  waitForSelection,
 } from "./fill-input";
 
 function record() {
@@ -126,5 +127,22 @@ describe("waitForChoice", () => {
     });
     controller.abort();
     await expect(done).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
+
+describe("waitForSelection", () => {
+  it("selects the presented candidate after the configured Auto delay", async () => {
+    vi.useFakeTimers();
+    const bind = vi.fn(() => () => undefined);
+    const done = waitForSelection({
+      selectionMode: "auto",
+      candidateId: "p1",
+      autoDelayMs: TOOL_PRESENT_PREVIEW_MS,
+      bind,
+    });
+    await vi.advanceTimersByTimeAsync(TOOL_PRESENT_PREVIEW_MS);
+    await expect(done).resolves.toBe("p1");
+    expect(bind).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

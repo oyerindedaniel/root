@@ -6,6 +6,7 @@ import {
   useMemo,
   type PropsWithChildren,
 } from "react";
+import type { SelectionMode } from "@repo/contracts";
 import {
   addCustomProvider,
   createProviderCatalog,
@@ -56,6 +57,7 @@ export type ProviderLibraryApi = {
   isPinned: (reference: DockReference) => boolean;
   setPanelTab: (tab: WorkspacePreferences["panel"]["tab"]) => void;
   setPresentPace: (pace: Partial<WorkspacePreferences["present"]>) => void;
+  setSelectionMode: (selectionMode: SelectionMode) => void;
   setNotifyWait: (notifyWait: boolean) => void;
   setAppsScrollTop: (scrollTop: number) => void;
 };
@@ -184,6 +186,9 @@ export function ProviderLibraryProvider({
             preview: pace.preview ?? current.present.preview,
           },
         }));
+      },
+      setSelectionMode(selectionMode) {
+        update((current) => ({ ...current, selectionMode }));
       },
       setNotifyWait(notifyWait) {
         update((current) => ({ ...current, notifyWait }));
