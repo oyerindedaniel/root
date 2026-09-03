@@ -2,7 +2,7 @@
 
 Hand this to an agent adding a site as a custom provider in Root.
 
-Root lives at `http://localhost:3000`. It loads the site in an iframe (`allow="tools"`) and lists WebMCP tools on that document. Custom tools are not prepare_workflow steps. After Root’s Test, a human grants tools before invoke.
+Root lives at `https://root.danieloyerinde.com`. It loads the site in an iframe (`allow="tools"`) and lists WebMCP tools on that document. Custom tools are not prepare_workflow steps. After Root’s Test, a human grants tools before invoke.
 
 ## Boundary
 
@@ -18,7 +18,7 @@ Register only tools meant for the agent. `execute` should return only what that 
 Root must be allowed to frame the page.
 
 ```
-Content-Security-Policy: frame-ancestors http://localhost:3000;
+Content-Security-Policy: frame-ancestors https://root.danieloyerinde.com;
 ```
 
 Do not send `X-Frame-Options: DENY` or `SAMEORIGIN`.
@@ -28,7 +28,7 @@ Do not send `X-Frame-Options: DENY` or `SAMEORIGIN`.
 Register on the live document with WebMCP (`document.modelContext.registerTool`). Expose tools to Root only:
 
 ```
-exposedTo: ["http://localhost:3000"]
+exposedTo: ["https://root.danieloyerinde.com"]
 ```
 
 Register from a shell that stays mounted across client navigations. Page-only registration aborts when the route changes.
@@ -39,7 +39,7 @@ Tool names: `^[A-Za-z0-9_.-]+$`, 1–128 characters. Discover needs at least one
 
 Apps → Add provider.
 
-- Origin: site origin, no path. Example: `http://localhost:3004`
-- Entry URL: the page Root should load. Example: `http://localhost:3004/`
+- Origin: site origin, no path. Example: `https://lab.danieloyerinde.com`
+- Entry URL: the page Root should load. Example: `https://lab.danieloyerinde.com/`
 
 Needs Chrome with WebMCP. Codex’s in-app browser cannot see those tools.

@@ -76,6 +76,12 @@ import {
   noResponseAbort,
   stoppedByUserAbort,
 } from "@/lib/runtime/cancellation";
+import {
+  createBrowserPendingHumanNotifyHost,
+  pendingHumanNotifyPermitted,
+  syncPendingHumanNotification,
+  type PendingHumanNotification,
+} from "@/lib/runtime/pending-human-notify";
 import { setPendingHumanTimer } from "@/lib/runtime/pending-human-timeout";
 import {
   abortInstance,
@@ -97,6 +103,7 @@ import { SessionWatcher } from "@/lib/runtime/session-watcher";
 import {
   createInitialRuntimeState,
   findProviderWindow,
+  waitingProviderIds,
   type ControlOwner,
   type ProviderWindow,
   type RuntimeAction,
@@ -166,6 +173,11 @@ export function RuntimeProvider({
   const instanceAbortsRef = useRef(new Map<string, AbortController>());
   const pendingHumanTimersRef = useRef(
     new Map<string, ReturnType<typeof setTimeout>>(),
+  );
+  const pendingHumanNotifyRef = useRef<PendingHumanNotification | null>(null);
+  const pendingHumanNotifyHost = useMemo(
+    () => createBrowserPendingHumanNotifyHost(),
+    [],
   );
   const windowSessionsRef = useRef(new Map<string, WindowSession>());
   const pendingFillRef = useRef(new Set<string>());
@@ -437,6 +449,49 @@ export function RuntimeProvider({
       instanceId,
       touchedAt: Date.now(),
     });
+  }, []);
+
+  useEffect(() => {
+    function sync() {
+      const pending = humanPendingIds.length > 0;
+      const providerId = waitingProviderIds(
+        stateRef.current,
+        humanPendingIds,
+      )[0];
+      let title = "";
+      if (providerId) {
+        if (hasProvider(catalog, providerId)) {
+          title = getProvider(catalog, providerId).label;
+        }
+      }
+      syncPendingHumanNotification(
+        pendingHumanNotifyRef,
+        {
+          pending,
+          hidden: document.hidden,
+          permitted: pendingHumanNotifyPermitted(preferences.notifyWait),
+          title,
+        },
+        pendingHumanNotifyHost,
+      );
+    }
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [
+    catalog,
+    humanPendingIds,
+    pendingHumanNotifyHost,
+    preferences.notifyWait,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      pendingHumanNotifyRef.current?.close();
+      pendingHumanNotifyRef.current = null;
+    };
   }, []);
 
   const listProviders = useCallback(

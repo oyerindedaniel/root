@@ -54,6 +54,7 @@ export type ProviderLibraryApi = {
   isPinned: (reference: DockReference) => boolean;
   setPanelTab: (tab: WorkspacePreferences["panel"]["tab"]) => void;
   setPresentPace: (pace: Partial<WorkspacePreferences["present"]>) => void;
+  setNotifyWait: (notifyWait: boolean) => void;
   setAppsScrollTop: (scrollTop: number) => void;
 };
 
@@ -165,6 +166,9 @@ export function ProviderLibraryProvider({
             preview: pace.preview ?? current.present.preview,
           },
         }));
+      },
+      setNotifyWait(notifyWait) {
+        update((current) => ({ ...current, notifyWait }));
       },
       setAppsScrollTop(scrollTop) {
         update((current) => ({

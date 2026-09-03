@@ -71,6 +71,7 @@ export const workspacePreferencesSchema = z
     dock: z.array(dockReferenceSchema).max(MAX_DOCK_APPS),
     panel: workspacePanelSchema.default(DEFAULT_WORKSPACE_PANEL),
     present: presentPaceSchema.default(DEFAULT_PRESENT_PACE),
+    notifyWait: z.boolean().default(false),
   })
   .superRefine((preferences, context) => {
     const providerIds = new Set<string>();
@@ -113,5 +114,6 @@ export function createDefaultWorkspacePreferences(): WorkspacePreferences {
     dock: DEFAULT_DOCK.map((reference) => ({ ...reference })),
     panel: { ...DEFAULT_WORKSPACE_PANEL },
     present: { ...DEFAULT_PRESENT_PACE },
+    notifyWait: false,
   };
 }

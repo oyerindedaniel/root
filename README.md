@@ -26,6 +26,8 @@ Root loads each provider in an iframe (`allow="tools"`) and talks only to tools 
 
 A person and an agent can run a pass across Catalog, Customers, and Cases on the live windows: search, open a record, fill a create form. Writes, search picks, and a field the person takes over wait for them on stage. A site that is not builtin can still join after a human grant (`invoke_granted_tool`). Take control stops the agent on that window.
 
+Try it at [root.danieloyerinde.com](https://root.danieloyerinde.com/). [Customers](https://account.danieloyerinde.com/), [Catalog](https://shop.danieloyerinde.com/), [Cases](https://support.danieloyerinde.com/), and [Lab](https://lab.danieloyerinde.com/) are the live apps.
+
 ## WebMCP
 
 Root’s own document registers the gateway: `list_providers`, `discover_capabilities`, `prepare_workflow`, `execute_workflow`, `invoke_granted_tool`, inspect, cancel, and window chrome.
@@ -40,7 +42,7 @@ document.modelContext.registerTool(
     inputSchema: { /* ... */ },
     execute: async (input) => { /* ... */ },
   },
-  { exposedTo: ["http://localhost:3000"] },
+  { exposedTo: ["https://root.danieloyerinde.com"] },
 );
 ```
 
