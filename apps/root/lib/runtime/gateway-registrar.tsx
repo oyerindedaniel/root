@@ -11,6 +11,7 @@ import {
   listProvidersInputSchema,
   MAX_PREPARED_WORKFLOW_STEPS,
   parseToolExecuteInput,
+  prepareWorkflowInputJsonSchema,
   prepareWorkflowInputSchema,
   windowChromeInputSchema,
   type BoundedError,
@@ -224,18 +225,8 @@ export async function registerGatewayTools(
     {
       name: "prepare_workflow",
       title: "Prepare workflow",
-      description: `Prepare 1 to ${MAX_PREPARED_WORKFLOW_STEPS} sequential allowlisted steps against trusted providers. Each step is providerId, a short tool from list_providers passTools (search_products, not shop.search_products), and arguments. Search and open are reads. Create is a write after a human persist on stage. Do not call discover_capabilities first; execute_workflow mounts and rediscovers.`,
-      inputSchema: {
-        type: "object",
-        properties: {
-          steps: {
-            type: "array",
-            description:
-              "Each step is { providerId, tool, arguments }. tool is the short passTools name, not shop.search_products.",
-          },
-        },
-        required: ["steps"],
-      },
+      description: `Prepare 1 to ${MAX_PREPARED_WORKFLOW_STEPS} sequential allowlisted steps against trusted providers. Each step is providerId, a short tool from list_providers passTools (search_products, not shop.search_products), and arguments. Search and open are reads. Create is a write after a human persist on stage. If a later step is for something selected earlier, bind that argument. Do not type the name, email, or id. Do not call discover_capabilities first; execute_workflow mounts and rediscovers.`,
+      inputSchema: prepareWorkflowInputJsonSchema,
       annotations: { readOnlyHint: true, untrustedContentHint: false },
       execute: async (input) => {
         let raw: unknown;

@@ -7,7 +7,12 @@ const apiRoot = resolve(fileURLToPath(new URL("../../../apps/api", import.meta.u
 const localPath = resolve(apiRoot, ".env.local");
 const envPath = resolve(apiRoot, ".env");
 
-if (existsSync(localPath)) {
-  config({ path: localPath });
+const configuredPath = process.env.DOTENV_CONFIG_PATH?.trim();
+if (configuredPath) {
+  config({ path: configuredPath });
+} else {
+  if (existsSync(localPath)) {
+    config({ path: localPath });
+  }
+  config({ path: envPath });
 }
-config({ path: envPath });

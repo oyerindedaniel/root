@@ -18,7 +18,8 @@
     "db:generate": "pnpm --filter @repo/db db:generate",
     "db:migrate": "pnpm --filter @repo/db db:migrate",
     "db:seed": "pnpm --filter @repo/api db:seed",
-    "db:seed:providers": "pnpm --filter @repo/api db:seed:providers"
+    "db:seed:providers": "pnpm --filter @repo/api db:seed:providers",
+    "db:prod": "node scripts/db-prod.mjs"
   },
   "devDependencies": {
     "prettier": "3.9.6",

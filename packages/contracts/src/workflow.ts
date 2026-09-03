@@ -193,6 +193,11 @@ export const prepareWorkflowInputSchema = z.strictObject({
 
 export type PrepareWorkflowInput = z.infer<typeof prepareWorkflowInputSchema>;
 
+export const prepareWorkflowInputJsonSchema = z.toJSONSchema(
+  prepareWorkflowInputSchema,
+  { target: "draft-07", io: "input" },
+);
+
 export const preparedCustomerSearchStepSchema = z.object({
   providerId: z.literal("accounts"),
   origin: originSchema,

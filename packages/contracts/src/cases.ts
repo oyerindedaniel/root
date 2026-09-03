@@ -30,7 +30,9 @@ export const searchCasesProposedQuerySchema = z.union([
 ]);
 
 export const searchCasesProposedArgumentsSchema = z.strictObject({
-  query: searchCasesProposedQuerySchema,
+  query: searchCasesProposedQuerySchema.describe(
+    "Case text, or bind an earlier selected snapshot.",
+  ),
 });
 
 export type SearchCasesProposedArguments = z.infer<

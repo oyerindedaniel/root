@@ -26,11 +26,15 @@ export const portableReferenceSchema = z.strictObject({
 
 export type PortableReference = z.infer<typeof portableReferenceSchema>;
 
-export const bindQuerySchema = z.strictObject({
-  bind: z.strictObject({
-    stepIndex: z.number().int().nonnegative(),
-  }),
-});
+export const bindQuerySchema = z
+  .strictObject({
+    bind: z.strictObject({
+      stepIndex: z.number().int().nonnegative(),
+    }),
+  })
+  .describe(
+    "Earlier selected snapshot. Use this when this step is that pick, not a retyped name, email, or id.",
+  );
 
 export type BindQuery = z.infer<typeof bindQuerySchema>;
 

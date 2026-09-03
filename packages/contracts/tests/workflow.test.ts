@@ -16,6 +16,7 @@ import {
   MAX_PREPARED_WORKFLOW_STEPS,
   MAX_PROVIDER_TOOLS,
   PASS_READ_TOOL_NAMES,
+  prepareWorkflowInputJsonSchema,
   prepareWorkflowInputSchema,
   prepareWorkflowOutputSchema,
   proposedWorkflowStepSchema,
@@ -74,6 +75,21 @@ function customerSearch(query: string) {
     tool: "search_customers" as const,
     arguments: { query },
   };
+}
+
+function jsonSchemaHasBind(value: unknown): boolean {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "bind")) {
+    return true;
+  }
+  for (const nested of Object.values(value)) {
+    if (jsonSchemaHasBind(nested)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 describe("proposed workflow steps", () => {
@@ -143,6 +159,10 @@ describe("proposed workflow steps", () => {
         arguments: { query: { bind: { stepIndex: 0 } } },
       }).success,
     ).toBe(true);
+  });
+
+  it("exposes bind on the prepare JSON schema the agent sees", () => {
+    expect(jsonSchemaHasBind(prepareWorkflowInputJsonSchema)).toBe(true);
   });
 
   it("rejects a mismatched provider and tool", () => {
