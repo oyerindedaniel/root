@@ -4,6 +4,7 @@ import {
   boundedError,
   boundedSuccess,
   documentVisibilityMessage,
+  documentToolGrantsMessage,
   GatewayError,
   parseCoeditMessage,
   parsePendingHumanMessage,
@@ -129,11 +130,14 @@ type TrayTarget = {
   restoreButton: HTMLButtonElement | null;
 };
 
+const EMPTY_GRANTED_TOOLS: readonly string[] = [];
+
 function postDocumentHostState(
   frame: HTMLIFrameElement | null,
   origin: string,
   placement: ProviderPlacement,
   presentPace: PresentPace,
+  grantedTools: readonly string[],
 ) {
   const contentWindow = frame?.contentWindow;
   if (!contentWindow) {
@@ -144,6 +148,7 @@ function postDocumentHostState(
     origin,
   );
   contentWindow.postMessage(presentPaceMessage(presentPace), origin);
+  contentWindow.postMessage(documentToolGrantsMessage(grantedTools), origin);
 }
 
 export function RuntimeProvider({
@@ -1082,6 +1087,8 @@ function ProviderWindowHost({
   const previousPlacementRef = useRef(windowState.placement);
   const layoutRafRef = useRef(0);
   const provider = getProvider(catalog, windowState.providerId);
+  const grantedTools =
+    provider.source === "custom" ? provider.grantedTools : EMPTY_GRANTED_TOOLS;
   const bindIframe = useCallback((iframe: HTMLIFrameElement | null) => {
     if (iframeRef.current !== iframe) {
       iframeLoadedRef.current = false;
@@ -1285,8 +1292,9 @@ function ProviderWindowHost({
       windowState.origin,
       windowState.placement,
       presentPace,
+      grantedTools,
     );
-  }, [presentPace, windowState.origin, windowState.placement]);
+  }, [grantedTools, presentPace, windowState.origin, windowState.placement]);
 
   useEffect(() => {
     if (windowState.control !== "agent") {
@@ -1376,6 +1384,7 @@ function ProviderWindowHost({
             windowState.origin,
             windowState.placement,
             presentPace,
+            grantedTools,
           );
           onLoad(windowState.instanceId);
         }}

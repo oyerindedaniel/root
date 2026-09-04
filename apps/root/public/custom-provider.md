@@ -33,6 +33,8 @@ exposedTo: ["https://root.danieloyerinde.com"]
 
 Register from a shell that stays mounted across client navigations. Page-only registration aborts when the route changes.
 
+Root posts the human grant list into this document (`webmcp/document-tool-grants`). Honor it in each `execute` (see `createDocumentToolGrantGate`) so a bare Chrome call cannot run an ungranted tool. Root still rejects ungranted invoke on its own path.
+
 Tool names: `^[A-Za-z0-9_.-]+$`, 1–128 characters. Discover needs at least one registered tool. Keep the set small. Do not register admin dumps, raw query, or anything that returns secrets unless the human will grant that on purpose.
 
 ## Add in Root

@@ -2,6 +2,7 @@
 
 import { requirePublicEnv } from "@repo/api-client/env";
 import {
+  createDocumentToolGrantGate,
   createDocumentVisibilityGate,
   parseToolExecuteInput,
 } from "@repo/contracts";
@@ -128,6 +129,9 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
   statusRef.current = status;
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const benchSlot = useRef(makeSlot<BenchSurface>()).current;
+  const grantGate = useRef(createDocumentToolGrantGate(rootOrigin)).current;
+
+  useEffect(() => grantGate.listen(), [grantGate]);
 
   const setStatus = useCallback((value: string) => {
     setStatusState(value);
@@ -186,7 +190,7 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
           readOnlyHint: true,
           untrustedContentHint: false,
         },
-        execute: async (_input, options) => {
+        execute: grantGate.guard("ping", async (_input, options) => {
           const signal = options?.signal ?? controller.signal;
           const bench = await benchSlot.waitUntil(() => true, signal);
           present.arm();
@@ -202,7 +206,7 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
             present.commit(null);
             throw caught;
           }
-        },
+        }),
       },
       {
         exposedTo: [rootOrigin],
@@ -220,7 +224,7 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
           readOnlyHint: false,
           untrustedContentHint: false,
         },
-        execute: async (input, options) => {
+        execute: grantGate.guard("set_status", async (input, options) => {
           const signal = options?.signal ?? controller.signal;
           const raw = parseToolExecuteInput(input);
           if (
@@ -272,7 +276,7 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
           } finally {
             present.setCoedit(false);
           }
-        },
+        }),
       },
       {
         exposedTo: [rootOrigin],
@@ -287,6 +291,7 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
     present.fill,
     present.setCoedit,
     present.waitForPersist,
+    grantGate,
   ]);
 
   return (
