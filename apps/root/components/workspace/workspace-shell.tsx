@@ -22,7 +22,11 @@ import {
   ROOT_APP_DRAG_TYPE,
   writeDockReference,
 } from "@/lib/dock/drag";
-import { resolveDockApps } from "@/lib/providers/catalog";
+import {
+  dockPinInsertIndex,
+  isDockPinned,
+  resolveDockApps,
+} from "@/lib/providers/catalog";
 import type { ProviderDirectory } from "@/lib/providers/directory";
 import {
   ProviderLibraryProvider,
@@ -173,6 +177,7 @@ function WorkspaceDock() {
       >
         {apps.map((app, index) => {
         const reference: DockReference = { kind: "provider", id: app.id };
+        const pinned = isDockPinned(preferences.dock, reference);
         const providerWindow = Object.values(state.windows).find(
           (windowState) => windowState.providerId === app.id,
         );
@@ -203,7 +208,10 @@ function WorkspaceDock() {
               if (dropped) {
                 event.preventDefault();
                 event.stopPropagation();
-                pin(dropped, index);
+                pin(
+                  dropped,
+                  dockPinInsertIndex(preferences.dock, apps, index),
+                );
                 removeCandidateRef.current = false;
                 setRemoveCandidate(null);
               }
@@ -218,8 +226,12 @@ function WorkspaceDock() {
                 }
                 aria-label={app.label}
                 data-window-placement={providerWindow?.placement}
-                draggable
+                draggable={pinned}
                 onDragStartCapture={(event) => {
+                  if (!pinned) {
+                    event.preventDefault();
+                    return;
+                  }
                   writeDockReference(event.dataTransfer, reference);
                   draggedRef.current = reference;
                   dockBoundsRef.current =

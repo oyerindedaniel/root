@@ -131,6 +131,32 @@ export function resolveDockApps(
   return resolved;
 }
 
+export function isDockPinned(
+  dock: readonly DockReference[],
+  reference: DockReference,
+): boolean {
+  return dock.some(
+    (entry) => entry.kind === reference.kind && entry.id === reference.id,
+  );
+}
+
+export function dockPinInsertIndex(
+  dock: readonly DockReference[],
+  apps: readonly InstalledApp[],
+  visualIndex: number,
+): number {
+  const pinned = new Set(dock.map((entry) => `${entry.kind}:${entry.id}`));
+  let insert = 0;
+  const end = Math.max(0, Math.min(visualIndex, apps.length));
+  for (let i = 0; i < end; i++) {
+    const app = apps[i];
+    if (app && pinned.has(`${app.kind}:${app.id}`)) {
+      insert += 1;
+    }
+  }
+  return insert;
+}
+
 export function addCustomProvider(
   preferences: WorkspacePreferences,
   provider: CustomProvider,

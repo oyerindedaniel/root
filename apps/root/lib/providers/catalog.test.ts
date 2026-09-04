@@ -5,9 +5,11 @@ import {
   addCustomProvider,
   createProviderCatalog,
   deleteCustomProvider,
+  dockPinInsertIndex,
   getProvider,
   hasProvider,
   installedApps,
+  isDockPinned,
   moveDockApp,
   pinDockApp,
   resolveDockApps,
@@ -285,5 +287,31 @@ describe("provider catalog", () => {
         (app) => app.id,
       ),
     ).toEqual(["accounts", "support"]);
+  });
+
+  it("maps Dock pin insert index past live unpinned marks", () => {
+    const preferences = {
+      ...createDefaultWorkspacePreferences(),
+      dock: [
+        { kind: "provider" as const, id: "accounts" },
+        { kind: "provider" as const, id: "support" },
+      ],
+    };
+    const catalog = createProviderCatalog(directory, preferences);
+    const apps = resolveDockApps(catalog, preferences.dock, ["shop"]);
+    expect(apps.map((app) => app.id)).toEqual([
+      "accounts",
+      "support",
+      "shop",
+    ]);
+    expect(dockPinInsertIndex(preferences.dock, apps, 0)).toBe(0);
+    expect(dockPinInsertIndex(preferences.dock, apps, 1)).toBe(1);
+    expect(dockPinInsertIndex(preferences.dock, apps, 2)).toBe(2);
+    expect(
+      isDockPinned(preferences.dock, { kind: "provider", id: "shop" }),
+    ).toBe(false);
+    expect(
+      isDockPinned(preferences.dock, { kind: "provider", id: "accounts" }),
+    ).toBe(true);
   });
 });
